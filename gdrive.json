@@ -1,0 +1,32 @@
+{
+    "KDE-KIO-Protocols": {
+        "gdrive": {
+            "Class": ":internet",
+            "ExtraNames": [],
+            "Icon": "folder-gdrive",
+            "X-DocPath": "kioworker6/gdrive/index.html",
+            "deleteRecursive": true,
+            "deleting": true,
+            "input": "none",
+            "linking": true,
+            "listing": [
+                "Name",
+                "Type",
+                "Size",
+                "Date",
+                "AccessDate",
+                "Access",
+                "Owner",
+                "Group",
+                "Link"
+            ],
+            "makedir": true,
+            "moving": true,
+            "opening": false,
+            "output": "filesystem",
+            "protocol": "gdrive",
+            "reading": true,
+            "writing": true
+        }
+    }
+}

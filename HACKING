@@ -1,0 +1,33 @@
+Install to custom prefix
+=========================
+
+You can install kio-gdrive to your preferred installation prefix,
+as long as kdeinit5 has been installed in the same prefix.
+
+Locate Debug Output
+===================
+
+You will not see the worker's output in the terminal where you started e.g. Dolphin.
+On systemd distros the output will go in the journalctl (assuming Qt built with the -journald option).
+A quick way to locate the relevant logs is the following command:
+
+    journalctl -b | grep kf.kio.workers.gdrive
+
+This will only show the logs since the last boot. To retrieve also older logs, you can filter the messages by the process who emitted them (kdeinit5):
+
+    journalctl $(which kdeinit5) | grep kf.kio.workers.gdrive
+
+Enable Debug Output
+===================
+
+Th gdrive worker uses categorized debug output. Normally you would enable its output with a simple:
+
+    export QT_LOGGING_RULES="kf.kio.workers.gdrive=true"
+
+However, you need to make sure this variable is present in the environment of kdeinit5,
+which is the process that starts the ioworker.
+
+A simpler alternative is to create (or edit) ~/.config/QtProject/qtlogging.ini with the following content:
+
+[Rules]
+kf.kio.workers.gdrive=true
