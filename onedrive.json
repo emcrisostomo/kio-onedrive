@@ -1,30 +1,26 @@
 {
     "KDE-KIO-Protocols": {
-        "gdrive": {
+        "onedrive": {
             "Class": ":internet",
             "ExtraNames": [],
-            "Icon": "folder-gdrive",
-            "X-DocPath": "kioworker6/gdrive/index.html",
+            "Icon": "im-msn",
+            "X-DocPath": "kioworker6/onedrive/index.html",
             "deleteRecursive": true,
             "deleting": true,
             "input": "none",
-            "linking": true,
+            "linking": false,
             "listing": [
                 "Name",
                 "Type",
                 "Size",
                 "Date",
-                "AccessDate",
-                "Access",
-                "Owner",
-                "Group",
-                "Link"
+                "Owner"
             ],
             "makedir": true,
             "moving": true,
             "opening": false,
             "output": "filesystem",
-            "protocol": "gdrive",
+            "protocol": "onedrive",
             "reading": true,
             "writing": true
         }
