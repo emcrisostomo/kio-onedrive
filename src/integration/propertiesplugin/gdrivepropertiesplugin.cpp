@@ -22,11 +22,11 @@ GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVar
 {
     Q_UNUSED(args)
 
-    qCDebug(GDRIVE) << "Starting Google Drive properties tab";
+    qCDebug(ONEDRIVE) << "Starting Google Drive properties tab";
 
     // Ignore if more than one file is selected
     if (properties->items().size() != 1) {
-        qCDebug(GDRIVE) << "Can't show Google Drive properties tab for more than one item";
+        qCDebug(ONEDRIVE) << "Can't show Google Drive properties tab for more than one item";
         return;
     }
 
@@ -34,7 +34,7 @@ GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVar
 
     // Ignore if not a Google Drive url
     if (m_item.url().scheme() != QLatin1String("gdrive")) {
-        qCDebug(GDRIVE) << "Can't show Google Drive properties for non Google Drive entries";
+        qCDebug(ONEDRIVE) << "Can't show Google Drive properties for non Google Drive entries";
         return;
     }
 
@@ -97,8 +97,8 @@ void GDrivePropertiesPlugin::statJobFinished(KJob *job)
 {
     KIO::StatJob *statJob = qobject_cast<KIO::StatJob *>(job);
     if (!statJob || statJob->error()) {
-        qCDebug(GDRIVE) << "Failed stat()ing" << statJob->url() << statJob->errorString();
-        qCDebug(GDRIVE) << "Not showing Google Drive properties tab";
+        qCDebug(ONEDRIVE) << "Failed stat()ing" << statJob->url() << statJob->errorString();
+        qCDebug(ONEDRIVE) << "Not showing Google Drive properties tab";
         return;
     }
     const KIO::UDSEntry entry = statJob->statResult();

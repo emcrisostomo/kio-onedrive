@@ -51,7 +51,7 @@ AccountPtr KAccountsManager::createAccount()
 
     QProcess process;
     process.start(QStringLiteral("kcmshell6"), {QStringLiteral("kcm_kaccounts")});
-    qCDebug(GDRIVE) << "Waiting for kcmshell process...";
+    qCDebug(ONEDRIVE) << "Waiting for kcmshell process...";
     if (process.waitForFinished(-1)) {
         loadAccounts();
     }
@@ -64,12 +64,12 @@ AccountPtr KAccountsManager::createAccount()
 
         // The KCM allows to add more than one account, but we can return only one from here.
         // So we just return the first new account in the set.
-        qCDebug(GDRIVE) << "New account successfully created:" << accountName;
+        qCDebug(ONEDRIVE) << "New account successfully created:" << accountName;
         return account(accountName);
     }
 
     // No accounts at all or no new account(s).
-    qCDebug(GDRIVE) << "No new account created.";
+    qCDebug(ONEDRIVE) << "No new account created.";
     return AccountPtr(new Account());
 }
 
@@ -82,7 +82,7 @@ AccountPtr KAccountsManager::refreshAccount(const AccountPtr &account)
         }
 
         const auto id = it.key();
-        qCDebug(GDRIVE) << "Refreshing" << accountName;
+        qCDebug(ONEDRIVE) << "Refreshing" << accountName;
         auto gapiAccount = getAccountCredentials(id, accountName);
         m_accounts.insert(id, gapiAccount);
         return gapiAccount;
@@ -105,7 +105,7 @@ void KAccountsManager::removeAccount(const QString &accountName)
         auto manager = KAccounts::accountsManager();
         auto account = Accounts::Account::fromId(manager, it.key());
         Q_ASSERT(account->displayName() == accountName);
-        qCDebug(GDRIVE) << "Going to remove account:" << account->displayName();
+        qCDebug(ONEDRIVE) << "Going to remove account:" << account->displayName();
         account->selectService(manager->service(QStringLiteral("google-drive")));
         account->setEnabled(false);
         account->sync();
@@ -136,13 +136,13 @@ void KAccountsManager::loadAccounts()
         if (account->providerName() != QLatin1String("google")) {
             continue;
         }
-        qCDebug(GDRIVE) << "Found google-provided account:" << account->displayName();
+        qCDebug(ONEDRIVE) << "Found google-provided account:" << account->displayName();
         const auto services = account->enabledServices();
         for (const auto &service : services) {
             if (service.name() != QLatin1String("google-drive")) {
                 continue;
             }
-            qCDebug(GDRIVE) << account->displayName() << "supports gdrive!";
+            qCDebug(ONEDRIVE) << account->displayName() << "supports gdrive!";
 
             auto gapiAccount = getAccountCredentials(id, account->displayName());
             m_accounts.insert(id, gapiAccount);
@@ -155,7 +155,7 @@ AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const
     auto job = new KAccounts::GetCredentialsJob(id, nullptr);
     job->exec();
     if (job->error()) {
-        qCWarning(GDRIVE) << "GetCredentialsJob failed:" << job->errorString();
+        qCWarning(ONEDRIVE) << "GetCredentialsJob failed:" << job->errorString();
     }
 
     auto gapiAccount = AccountPtr(new Account(displayName,
@@ -167,8 +167,9 @@ AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const
         gapiAccount->addScope(QUrl::fromUserInput(scope));
     }
 
-    qCDebug(GDRIVE) << "Got account credentials for:" << gapiAccount->accountName() << ", accessToken:" << GDriveHelper::elideToken(gapiAccount->accessToken())
-                    << ", refreshToken:" << GDriveHelper::elideToken(gapiAccount->refreshToken());
+    qCDebug(ONEDRIVE) << "Got account credentials for:" << gapiAccount->accountName()
+                      << ", accessToken:" << GDriveHelper::elideToken(gapiAccount->accessToken())
+                      << ", refreshToken:" << GDriveHelper::elideToken(gapiAccount->refreshToken());
 
     return gapiAccount;
 }
