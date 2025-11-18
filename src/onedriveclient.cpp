@@ -85,7 +85,7 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 QNetworkRequest Client::buildRequest(const QString &accessToken, const QUrl &url) const
 {
     QNetworkRequest request(url);
-    request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     return request;
