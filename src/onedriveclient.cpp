@@ -14,6 +14,7 @@
 #include <QNetworkRequest>
 #include <QUrl>
 #include <QUrlQuery>
+#include <qnetworkrequest.h>
 
 using namespace OneDrive;
 
@@ -31,13 +32,13 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com/v1.0/"));
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
     if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("me/drive/root/children"));
+        url.setPath(QStringLiteral("/v1.0/me/drive/root/children"));
     } else if (itemId.isEmpty()) {
-        url.setPath(QStringLiteral("drives/%1/root/children").arg(driveId));
+        url.setPath(QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId));
     } else {
-        url.setPath(QStringLiteral("drives/%1/items/%2/children").arg(driveId, itemId));
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
     }
 
     QUrlQuery query;
@@ -85,6 +86,8 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 QNetworkRequest Client::buildRequest(const QString &accessToken, const QUrl &url) const
 {
     QNetworkRequest request(url);
+    // Microsoft Graph occasionally breaks newer HTTP/2 sessions, so stick to HTTP/1.1.
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
