@@ -9,11 +9,11 @@
 
 #include <KAccounts/KAccountsDPlugin>
 
-class GoogleDrivePlugin : public KAccounts::KAccountsDPlugin
+class OneDrivePlugin : public KAccounts::KAccountsDPlugin
 {
     Q_OBJECT
 public:
-    explicit GoogleDrivePlugin(QObject *parent, const QVariantList &args);
+    explicit OneDrivePlugin(QObject *parent, const QVariantList &args);
 
 public Q_SLOTS:
     void onAccountCreated(const Accounts::AccountId accountId, const Accounts::ServiceList &serviceList) override;

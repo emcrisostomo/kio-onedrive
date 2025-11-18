@@ -1,6 +1,6 @@
 {
     "KPlugin": {
-        "Description": "Integrate KIO gdrive",
+        "Description": "Integrate KIO OneDrive",
         "Description[ar]": "تكامل وحدة الدخل/الخرج لغوغل درايف",
         "Description[az]": "KIO gdrive ilə inteqrasiya",
         "Description[be]": "Інтэграцыя KIO gdrive",
@@ -48,7 +48,7 @@
         "EnabledByDefault": true,
         "Icon": "system-file-manager",
         "License": "GPL",
-        "Name": "KIO gdrive",
+        "Name": "KIO OneDrive",
         "Name[ar]": "وحدة الدخل/الخرج لغوغل درايف",
         "Name[az]": "KIO gdrive",
         "Name[be]": "KIO gdrive",

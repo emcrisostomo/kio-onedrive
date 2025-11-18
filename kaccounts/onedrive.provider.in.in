@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <provider id="microsoft">
   <name>Microsoft</name>
-  <description>Access Microsoft accounts for KIO OneDrive</description>
+  <description>Includes Microsoft OneDrive</description>
   <icon>onedrive</icon>
   <translations>kaccounts-providers</translations>
+  <domains>.*microsoftonline\.com|.*live\.com|.*microsoft\.com</domains>
 
   <template>
     <group name="auth">
@@ -12,20 +13,19 @@
       <group name="oauth2">
         <group name="web_server">
           <setting name="Host">login.microsoftonline.com</setting>
-          <setting name="AuthPath">common/oauth2/v2.0/authorize</setting>
-          <setting name="TokenPath">common/oauth2/v2.0/token</setting>
-          <setting name="RedirectUri">https://login.microsoftonline.com/common/oauth2/nativeclient</setting>
+          <setting name="AuthPath">@ONEDRIVE_TENANT@/oauth2/v2.0/authorize?prompt=select_account</setting>
+          <setting name="TokenPath">@ONEDRIVE_TENANT@/oauth2/v2.0/token</setting>
+          <setting name="RedirectUri">http://localhost/oauth2callback</setting>
           <setting name="ResponseType">code</setting>
           <setting type="as" name="Scope">[
-              'offline_access',
-              'openid',
-              'profile',
+              'https://graph.microsoft.com/Files.ReadWrite.All',
               'https://graph.microsoft.com/User.Read',
-              'https://graph.microsoft.com/Files.ReadWrite.All'
+              'offline_access'
           ]</setting>
           <setting type="as" name="AllowedSchemes">['https']</setting>
           <setting name="ClientId">@ONEDRIVE_CLIENT_ID@</setting>
           <setting name="ClientSecret">@ONEDRIVE_CLIENT_SECRET@</setting>
+          <setting type="b" name="ForceClientAuthViaRequestBody">true</setting>
         </group>
       </group>
     </group>

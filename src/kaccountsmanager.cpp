@@ -83,9 +83,9 @@ AccountPtr KAccountsManager::refreshAccount(const AccountPtr &account)
 
         const auto id = it.key();
         qCDebug(ONEDRIVE) << "Refreshing" << accountName;
-        auto gapiAccount = getAccountCredentials(id, accountName);
-        m_accounts.insert(id, gapiAccount);
-        return gapiAccount;
+        auto cloudAccount = getAccountCredentials(id, accountName);
+        m_accounts.insert(id, cloudAccount);
+        return cloudAccount;
     }
 
     return {};
@@ -106,7 +106,7 @@ void KAccountsManager::removeAccount(const QString &accountName)
         auto account = Accounts::Account::fromId(manager, it.key());
         Q_ASSERT(account->displayName() == accountName);
         qCDebug(ONEDRIVE) << "Going to remove account:" << account->displayName();
-        account->selectService(manager->service(QStringLiteral("google-drive")));
+        account->selectService(manager->service(QStringLiteral("onedrive")));
         account->setEnabled(false);
         account->sync();
         return;
@@ -133,19 +133,19 @@ void KAccountsManager::loadAccounts()
     const auto enabledIDs = manager->accountListEnabled();
     for (const auto id : enabledIDs) {
         auto account = manager->account(id);
-        if (account->providerName() != QLatin1String("google")) {
+        if (account->providerName() != QLatin1String("microsoft")) {
             continue;
         }
-        qCDebug(ONEDRIVE) << "Found google-provided account:" << account->displayName();
+        qCDebug(ONEDRIVE) << "Found Microsoft-provided account:" << account->displayName();
         const auto services = account->enabledServices();
         for (const auto &service : services) {
-            if (service.name() != QLatin1String("google-drive")) {
+            if (service.name() != QLatin1String("onedrive")) {
                 continue;
             }
-            qCDebug(ONEDRIVE) << account->displayName() << "supports gdrive!";
+            qCDebug(ONEDRIVE) << account->displayName() << "supports onedrive!";
 
-            auto gapiAccount = getAccountCredentials(id, account->displayName());
-            m_accounts.insert(id, gapiAccount);
+            auto cloudAccount = getAccountCredentials(id, account->displayName());
+            m_accounts.insert(id, cloudAccount);
         }
     }
 }
@@ -158,18 +158,18 @@ AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const
         qCWarning(ONEDRIVE) << "GetCredentialsJob failed:" << job->errorString();
     }
 
-    auto gapiAccount = AccountPtr(new Account(displayName,
-                                              job->credentialsData().value(QStringLiteral("AccessToken")).toString(),
-                                              job->credentialsData().value(QStringLiteral("RefreshToken")).toString()));
+    auto cloudAccount = AccountPtr(new Account(displayName,
+                                               job->credentialsData().value(QStringLiteral("AccessToken")).toString(),
+                                               job->credentialsData().value(QStringLiteral("RefreshToken")).toString()));
 
     const auto scopes = job->credentialsData().value(QStringLiteral("Scope")).toStringList();
     for (const auto &scope : scopes) {
-        gapiAccount->addScope(QUrl::fromUserInput(scope));
+        cloudAccount->addScope(QUrl::fromUserInput(scope));
     }
 
-    qCDebug(ONEDRIVE) << "Got account credentials for:" << gapiAccount->accountName()
-                      << ", accessToken:" << GDriveHelper::elideToken(gapiAccount->accessToken())
-                      << ", refreshToken:" << GDriveHelper::elideToken(gapiAccount->refreshToken());
+    qCDebug(ONEDRIVE) << "Got account credentials for:" << cloudAccount->accountName()
+                      << ", accessToken:" << GDriveHelper::elideToken(cloudAccount->accessToken())
+                      << ", refreshToken:" << GDriveHelper::elideToken(cloudAccount->refreshToken());
 
-    return gapiAccount;
+    return cloudAccount;
 }

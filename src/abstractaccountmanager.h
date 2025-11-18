@@ -39,7 +39,7 @@ public:
     virtual void removeAccount(const QString &accountName) = 0;
 
     /**
-     * @return The gdrive accounts managed by this object.
+     * @return The OneDrive accounts managed by this object.
      */
     virtual QSet<QString> accounts() = 0;
 };
