@@ -27,7 +27,7 @@ void GDriveJob::start()
     }
 
     QUrl destUrl;
-    destUrl.setScheme(QStringLiteral("gdrive"));
+    destUrl.setScheme(QStringLiteral("onedrive"));
     destUrl.setPath(accountName + folder);
 
     const QList<QUrl> sourceUrls = arrayToList(data().value(QStringLiteral("urls")).toArray());

@@ -51,17 +51,17 @@ using namespace Drive;
 class KIOPluginForMetaData : public QObject
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.kde.kio.slave.gdrive" FILE "onedrive.json")
+    Q_PLUGIN_METADATA(IID "org.kde.kio.slave.onedrive" FILE "onedrive.json")
 };
 
 extern "C" {
 int Q_DECL_EXPORT kdemain(int argc, char **argv)
 {
     QApplication app(argc, argv);
-    app.setApplicationName(QStringLiteral("kio_gdrive"));
+    app.setApplicationName(QStringLiteral("kio_onedrive"));
 
     if (argc != 4) {
-        fprintf(stderr, "Usage: kio_gdrive protocol domain-socket1 domain-socket2\n");
+        fprintf(stderr, "Usage: kio_onedrive protocol domain-socket1 domain-socket2\n");
         exit(-1);
     }
 
@@ -72,13 +72,13 @@ int Q_DECL_EXPORT kdemain(int argc, char **argv)
 }
 
 KIOGDrive::KIOGDrive(const QByteArray &protocol, const QByteArray &pool_socket, const QByteArray &app_socket)
-    : WorkerBase("gdrive", pool_socket, app_socket)
+    : WorkerBase("onedrive", pool_socket, app_socket)
 {
     Q_UNUSED(protocol);
 
     m_accountManager.reset(new AccountManager);
 
-    qCDebug(ONEDRIVE) << "KIO GDrive ready: version" << ONEDRIVE_VERSION_STRING;
+    qCDebug(ONEDRIVE) << "KIO OneDrive ready: version" << ONEDRIVE_VERSION_STRING;
 }
 
 KIOGDrive::~KIOGDrive()
@@ -128,7 +128,7 @@ KIO::WorkerResult KIOGDrive::fileSystemFreeSpace(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
     if (gdriveUrl.isRoot()) {
-        qCDebug(ONEDRIVE) << "fileSystemFreeSpace is not supported for gdrive root url";
+        qCDebug(ONEDRIVE) << "fileSystemFreeSpace is not supported for onedrive root url";
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_STAT, url.toDisplayString());
     }
 
@@ -252,7 +252,7 @@ KIO::UDSEntry KIOGDrive::sharedWithMeUDSEntry()
     KIO::UDSEntry entry;
 
     entry.fastInsert(KIO::UDSEntry::UDS_NAME, GDriveUrl::SharedWithMeDir);
-    entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, i18nc("folder containing gdrive files shared with me", "Shared With Me"));
+    entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, i18nc("folder containing OneDrive files shared with me", "Shared With Me"));
     entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
     entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-publicshare"));
     entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR);
@@ -269,7 +269,7 @@ KIO::UDSEntry KIOGDrive::accountToUDSEntry(const QString &accountNAme)
     entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
     entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
     entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-gdrive"));
+    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("onedrive"));
 
     return entry;
 }
@@ -290,7 +290,7 @@ KIO::UDSEntry KIOGDrive::sharedDriveToUDSEntry(const DrivesPtr &sharedDrive)
     entry.fastInsert(KIO::UDSEntry::UDS_CREATION_TIME, sharedDrive->createdDate().toSecsSinceEpoch());
     entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, udsAccess);
     entry.fastInsert(KIO::UDSEntry::UDS_HIDDEN, sharedDrive->hidden());
-    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-gdrive"));
+    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("onedrive"));
 
     return entry;
 }
@@ -300,7 +300,7 @@ KIO::WorkerResult KIOGDrive::createAccount()
     const KGAPI2::AccountPtr account = m_accountManager->createAccount();
     if (!account->accountName().isEmpty()) {
         // Redirect to the account we just created.
-        redirection(QUrl(QStringLiteral("gdrive:/%1").arg(account->accountName())));
+        redirection(QUrl(QStringLiteral("onedrive:/%1").arg(account->accountName())));
         return KIO::WorkerResult::pass();
     }
 
@@ -309,7 +309,7 @@ KIO::WorkerResult KIOGDrive::createAccount()
     }
 
     // Redirect to the root, we already have some account.
-    redirection(QUrl(QStringLiteral("gdrive:/")));
+    redirection(QUrl(QStringLiteral("onedrive:/")));
     return KIO::WorkerResult::pass();
 }
 
@@ -454,7 +454,7 @@ KIO::UDSEntry KIOGDrive::fetchSharedDrivesRootEntry(const QString &accountId, Fe
     }
     entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
     entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
-    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-gdrive"));
+    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("onedrive"));
 
     qlonglong udsAccess = S_IRUSR | S_IXUSR;
     // If user is allowed to create shared Drives, add write bit on directory
@@ -1432,7 +1432,7 @@ KIO::WorkerResult KIOGDrive::rename(const QUrl &src, const QUrl &dest, KIO::JobF
 
     ParentReferencesList parentReferences = sourceFile->parents();
     if (destGDriveUrl.isRoot()) {
-        // user is trying to move to top-level gdrive:///
+        // user is trying to move to top-level onedrive:///
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, dest.fileName());
     }
     if (destGDriveUrl.isAccountRoot()) {

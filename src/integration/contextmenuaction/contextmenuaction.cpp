@@ -34,8 +34,8 @@ QList<QAction *> ContextMenuAction::actions(const KFileItemListProperties &fileI
 
     const KFileItem item = fileItemInfos.items().at(0);
 
-    // Ignore if not a Google Drive url
-    if (item.url().scheme() != QLatin1String("gdrive")) {
+    // Ignore if not a OneDrive url
+    if (item.url().scheme() != QLatin1String("onedrive")) {
         return {};
     }
 
@@ -50,9 +50,9 @@ QList<QAction *> ContextMenuAction::actions(const KFileItemListProperties &fileI
     gdriveMenu->addAction(createOpenUrlAction(parentWidget, gdriveLink));
     gdriveMenu->addAction(createCopyUrlAction(parentWidget, gdriveLink));
 
-    QAction *gdriveMenuAction = new QAction(i18n("Google Drive"), parentWidget);
+    QAction *gdriveMenuAction = new QAction(i18n("Microsoft OneDrive"), parentWidget);
     gdriveMenuAction->setMenu(gdriveMenu);
-    gdriveMenuAction->setIcon(QIcon::fromTheme(QStringLiteral("folder-gdrive")));
+    gdriveMenuAction->setIcon(QIcon::fromTheme(QStringLiteral("im-msn")));
 
     return {gdriveMenuAction};
 }

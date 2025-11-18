@@ -22,19 +22,19 @@ GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVar
 {
     Q_UNUSED(args)
 
-    qCDebug(ONEDRIVE) << "Starting Google Drive properties tab";
+    qCDebug(ONEDRIVE) << "Starting OneDrive properties tab";
 
     // Ignore if more than one file is selected
     if (properties->items().size() != 1) {
-        qCDebug(ONEDRIVE) << "Can't show Google Drive properties tab for more than one item";
+        qCDebug(ONEDRIVE) << "Can't show OneDrive properties tab for more than one item";
         return;
     }
 
     m_item = properties->items().at(0);
 
-    // Ignore if not a Google Drive url
-    if (m_item.url().scheme() != QLatin1String("gdrive")) {
-        qCDebug(ONEDRIVE) << "Can't show Google Drive properties for non Google Drive entries";
+    // Ignore if not a OneDrive url
+    if (m_item.url().scheme() != QLatin1String("onedrive")) {
+        qCDebug(ONEDRIVE) << "Can't show OneDrive properties for non OneDrive entries";
         return;
     }
 
@@ -98,12 +98,12 @@ void GDrivePropertiesPlugin::statJobFinished(KJob *job)
     KIO::StatJob *statJob = qobject_cast<KIO::StatJob *>(job);
     if (!statJob || statJob->error()) {
         qCDebug(ONEDRIVE) << "Failed stat()ing" << statJob->url() << statJob->errorString();
-        qCDebug(ONEDRIVE) << "Not showing Google Drive properties tab";
+        qCDebug(ONEDRIVE) << "Not showing OneDrive properties tab";
         return;
     }
     const KIO::UDSEntry entry = statJob->statResult();
     showEntryDetails(entry);
-    properties->addPage(&m_widget, i18n("G&oogle Drive"));
+    properties->addPage(&m_widget, i18n("&OneDrive"));
 }
 
 #include "gdrivepropertiesplugin.moc"

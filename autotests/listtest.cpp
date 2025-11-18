@@ -24,7 +24,7 @@ QTEST_GUILESS_MAIN(ListTest)
 
 void ListTest::testListJob()
 {
-    const auto gdriveRoot = QUrl(QStringLiteral("gdrive:/"));
+    const auto gdriveRoot = QUrl(QStringLiteral("onedrive:/"));
     QVERIFY(gdriveRoot.isValid());
 
     auto listJob = KIO::listDir(gdriveRoot, KIO::HideProgressInfo);

@@ -9,7 +9,7 @@
 
 #include "gdriveurl.h"
 
-const QString GDriveUrl::Scheme = QLatin1String("gdrive");
+const QString GDriveUrl::Scheme = QLatin1String("onedrive");
 const QString GDriveUrl::SharedWithMeDir = QLatin1String("Shared With Me");
 const QString GDriveUrl::SharedDrivesDir = QLatin1String("Shared Drives");
 const QString GDriveUrl::TrashDir = QLatin1String("trash");

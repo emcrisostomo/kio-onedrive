@@ -1,6 +1,6 @@
 {
     "KPlugin": {
-        "Description": "Properties page showing additional information regarding a Google Drive item",
+        "Description": "Properties page showing additional information regarding a Microsoft OneDrive item",
         "Description[ar]": "صفحة الخصائص التي تعرض معلومات إضافية بخصوص عنصر غوغل درايف",
         "Description[az]": "Xüsusiyyətlər səhifəsi Google Disk elemntləri ilə bağlı əlavə məlumatları göstərir",
         "Description[be]": "Старонка ўласцівасцяў паказвае дадатковую інфармацыю пра элемент Google Drive",
@@ -9,7 +9,7 @@
         "Description[da]": "Egenskabsside som viser yderligere information om et Google Drev-element",
         "Description[de]": "Eigenschaftenseite mit zusätzliche Informationen zu einem Eintrag in Google Drive",
         "Description[el]": "Η σελίδα ιδιοτήτων εμφανίζει πρόσθετες πληροφορίες σχετικά με ένα αντικείμενο του Google Drive",
-        "Description[en_GB]": "Properties page showing additional information regarding a Google Drive item",
+        "Description[en_GB]": "Properties page showing additional information regarding a Microsoft OneDrive item",
         "Description[eo]": "Proprecopaĝo montrante pluajn informojn pri Google Drive-ero",
         "Description[es]": "Página de propiedades que muestra información adicional sobre el elemento de Google Drive",
         "Description[et]": "Google Drive'i elemendi kohta lisateavet näitav omaduste leht",
@@ -44,12 +44,12 @@
         "Description[uk]": "На сторінці властивостей показано додаткові відомості щодо запису Диска Google",
         "Description[zh_CN]": "显示 Google Drive 项目额外信息的属性页面",
         "Description[zh_TW]": "顯示 Google 雲端硬碟項目額外資訊的屬性頁面",
-        "Icon": "folder-gdrive",
+        "Icon": "im-msn",
         "MimeTypes": [
             "inode/directory",
             "application/octet-stream"
         ],
-        "Name": "Google Drive Properties Page",
+        "Name": "Microsoft OneDrive Properties Page",
         "Name[ar]": "صفحة خصائص غوغل درايف",
         "Name[az]": "Googıe Disk xüsusiyyətləri səhifəsi",
         "Name[be]": "Старонка ўласцівасцяў Google Drive",
@@ -59,7 +59,7 @@
         "Name[da]": "Egenskabsside for Google Drev",
         "Name[de]": "Eigenschaftenseite für Google Drive",
         "Name[el]": "Σελίδα ιδιοτήτων Google Drive",
-        "Name[en_GB]": "Google Drive Properties Page",
+        "Name[en_GB]": "Microsoft OneDrive Properties Page",
         "Name[eo]": "Google Drive-Proprecopaĝo",
         "Name[es]": "Página de propiedades de Google Drive",
         "Name[et]": "Google Drive'i omaduste leht",
@@ -97,5 +97,5 @@
         "Name[zh_TW]": "Google 雲端硬碟屬性頁面"
     },
     "MimeType": "inode/directory;application/octet-stream",
-    "X-KDE-Protocol": "gdrive"
+    "X-KDE-Protocol": "onedrive"
 }

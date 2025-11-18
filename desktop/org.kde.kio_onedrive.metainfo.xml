@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <component type="addon">
-  <id>org.kde.kio_gdrive</id>
+  <id>org.kde.kio_onedrive</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-2.0+</project_license>
   <extends>org.kde.dolphin.desktop</extends>
   <extends>org.kde.konqueror.desktop</extends>
   <extends>org.kde.krusader.desktop</extends>
   <extends>org.kde.gwenview.desktop</extends>
-  <name>KIO GDrive</name>
+  <name>KIO OneDrive</name>
   <name xml:lang="ar">وحدة الدخل/الخرج لغوغل درايف</name>
   <name xml:lang="az">KIO GDrive</name>
   <name xml:lang="be">KIO GDrive</name>
@@ -17,7 +17,7 @@
   <name xml:lang="da">KIO GDrive</name>
   <name xml:lang="de">KIO GDrive</name>
   <name xml:lang="el">KIO GDrive</name>
-  <name xml:lang="en-GB">KIO GDrive</name>
+  <name xml:lang="en-GB">KIO OneDrive</name>
   <name xml:lang="eo">KIO-GDrive</name>
   <name xml:lang="es">KIO GDrive</name>
   <name xml:lang="et">KIO GDrive</name>
@@ -52,7 +52,7 @@
   <name xml:lang="uk">KIO GDrive</name>
   <name xml:lang="zh-CN">KIO GDrive</name>
   <name xml:lang="zh-TW">KIO GDrive</name>
-  <summary>Google Drive integration with KDE Plasma and KDE applications</summary>
+  <summary>Microsoft OneDrive integration with KDE Plasma and KDE applications</summary>
   <summary xml:lang="ar">تكامل غوغل درايف مع تطبيقات بلازما و كِيدِي</summary>
   <summary xml:lang="az">Google Diskin KDE Plasma və KDE tətbiqləri ilə inteqrasiyası</summary>
   <summary xml:lang="be">Інтэграцыя Google Drive з KDE Plasma і праграмамі KDE</summary>
@@ -62,7 +62,7 @@
   <summary xml:lang="da">Google Drive-integration med KDE Plasma og KDE-programmer</summary>
   <summary xml:lang="de">Integration von Google Drive mit Plasma und den KDE-Anwendungen</summary>
   <summary xml:lang="el">Ενσωμάτωση του Google Drive με το KDE Plasma και τις εφαρμογές του KDE</summary>
-  <summary xml:lang="en-GB">Google Drive integration with KDE Plasma and KDE applications</summary>
+  <summary xml:lang="en-GB">Microsoft OneDrive integration with KDE Plasma and KDE applications</summary>
   <summary xml:lang="eo">Google Drive-integriĝo kun KDE PlasmaKDE Plasma kaj KDE-aplikoj</summary>
   <summary xml:lang="es">Integración de Google Drive con Plasma de KDE y aplicaciones de KDE</summary>
   <summary xml:lang="et">Google Drive'i lõimimine KDE Plasma ja KDE rakendustega</summary>
@@ -215,5 +215,5 @@
   <categories>
     <category>Network</category>
   </categories>
-  <icon type="stock">folder-gdrive</icon>
+  <icon type="stock">im-msn</icon>
 </component>

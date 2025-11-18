@@ -1,4 +1,4 @@
-install(FILES gdrive-network.desktop
+install(FILES onedrive-network.desktop
         DESTINATION ${KDE_INSTALL_DATADIR}/remoteview)
-install(FILES org.kde.kio_gdrive.metainfo.xml
+install(FILES org.kde.kio_onedrive.metainfo.xml
         DESTINATION ${KDE_INSTALL_METAINFODIR})

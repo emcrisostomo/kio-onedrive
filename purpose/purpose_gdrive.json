@@ -50,7 +50,7 @@
             }
         ],
         "Category": "Utilities",
-        "Description": "Upload files to Google Drive",
+        "Description": "Upload files to Microsoft OneDrive",
         "Description[ar]": "ارفع ملفات إلى غوغل درايف",
         "Description[az]": "Faylları Google Diskə yükləyin",
         "Description[be]": "Запампаваць файлы на Google Drive",
@@ -60,7 +60,7 @@
         "Description[da]": "Upload filer til Google Drev",
         "Description[de]": "Dateien zu „Google Drive“ hochladen",
         "Description[el]": "Αποστολή αρχείων στο Google Drive",
-        "Description[en_GB]": "Upload files to Google Drive",
+        "Description[en_GB]": "Upload files to Microsoft OneDrive",
         "Description[eo]": "Alŝuti dosierojn al Google Drive",
         "Description[es]": "Subir archivos a Google Drive",
         "Description[eu]": "Zama-igo fitxategiak Google Drivera",
@@ -95,9 +95,9 @@
         "Description[uk]": "Вивантаження файлів на Google Диск",
         "Description[zh_CN]": "将文件上传到 Google Drive",
         "Description[zh_TW]": "上傳檔案到 Google 雲端硬碟",
-        "Icon": "folder-gdrive",
+        "Icon": "im-msn",
         "License": "GPL",
-        "Name": "Google Drive",
+        "Name": "Microsoft OneDrive",
         "Name[ar]": "جوجل درايف",
         "Name[az]": "Google Disk",
         "Name[be]": "Google Drive",
@@ -107,7 +107,7 @@
         "Name[da]": "Google Drev",
         "Name[de]": "Google Drive",
         "Name[el]": "Google Drive",
-        "Name[en_GB]": "Google Drive",
+        "Name[en_GB]": "Microsoft OneDrive",
         "Name[eo]": "Google Drive",
         "Name[es]": "Google Drive",
         "Name[eu]": "Google Drive",
@@ -142,7 +142,7 @@
         "Name[uk]": "Google Диск",
         "Name[zh_CN]": "Google Drive",
         "Name[zh_TW]": "Google 雲端硬碟",
-        "X-Purpose-ActionDisplay": "Google Drive..."
+        "X-Purpose-ActionDisplay": "Microsoft OneDrive..."
     },
     "X-Purpose-Configuration": [
         "folder",
