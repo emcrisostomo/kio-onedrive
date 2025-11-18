@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<provider id="microsoft">
+  <name>Microsoft</name>
+  <description>Access Microsoft accounts for KIO OneDrive</description>
+  <icon>onedrive</icon>
+  <translations>kaccounts-providers</translations>
+
+  <template>
+    <group name="auth">
+      <setting name="method">oauth2</setting>
+      <setting name="mechanism">web_server</setting>
+      <group name="oauth2">
+        <group name="web_server">
+          <setting name="Host">login.microsoftonline.com</setting>
+          <setting name="AuthPath">common/oauth2/v2.0/authorize</setting>
+          <setting name="TokenPath">common/oauth2/v2.0/token</setting>
+          <setting name="RedirectUri">https://login.microsoftonline.com/common/oauth2/nativeclient</setting>
+          <setting name="ResponseType">code</setting>
+          <setting type="as" name="Scope">[
+              'offline_access',
+              'openid',
+              'profile',
+              'https://graph.microsoft.com/User.Read',
+              'https://graph.microsoft.com/Files.ReadWrite.All'
+          ]</setting>
+          <setting type="as" name="AllowedSchemes">['https']</setting>
+          <setting name="ClientId">@ONEDRIVE_CLIENT_ID@</setting>
+          <setting name="ClientSecret">@ONEDRIVE_CLIENT_SECRET@</setting>
+        </group>
+      </group>
+    </group>
+  </template>
+</provider>

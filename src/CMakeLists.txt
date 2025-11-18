@@ -10,12 +10,10 @@ set(kio_onedrive_SRCS
     gdrivehelper.cpp
     gdriveurl.cpp)
 
-if (KAccounts6_FOUND)
-    set(BACKEND_SRC kaccountsmanager.cpp)
-    set(BACKEND_HEADER kaccountsmanager.h)
-    set(BACKEND_CLASSNAME KAccountsManager)
-    set(BACKEND_LIBS KAccounts6)
-endif()
+set(BACKEND_SRC kaccountsmanager.cpp)
+set(BACKEND_HEADER kaccountsmanager.h)
+set(BACKEND_CLASSNAME KAccountsManager)
+set(BACKEND_LIBS KAccounts6)
 
 set(kio_onedrive_SRCS ${kio_onedrive_SRCS} ${BACKEND_SRC})
 configure_file(gdrivebackend.h.in ${CMAKE_CURRENT_BINARY_DIR}/gdrivebackend.h)
