@@ -6,7 +6,7 @@
 
 #include "gdrivepropertiesplugin.h"
 #include "../../gdrive_udsentry.h"
-#include "../../gdrivedebug.h"
+#include "../../onedrivedebug.h"
 
 #include <KIO/StatJob>
 #include <KLocalizedString>

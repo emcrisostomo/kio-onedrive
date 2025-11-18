@@ -6,8 +6,8 @@
  */
 
 #include "kaccountsmanager.h"
-#include "gdrivedebug.h"
 #include "gdrivehelper.h"
+#include "onedrivedebug.h"
 
 #include <Accounts/Manager>
 #include <Accounts/Provider>

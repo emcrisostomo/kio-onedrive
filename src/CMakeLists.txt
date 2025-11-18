@@ -21,7 +21,7 @@ set(kio_onedrive_SRCS ${kio_onedrive_SRCS} ${BACKEND_SRC})
 configure_file(gdrivebackend.h.in ${CMAKE_CURRENT_BINARY_DIR}/gdrivebackend.h)
 
 ecm_qt_declare_logging_category(kio_onedrive_SRCS
-    HEADER gdrivedebug.h
+    HEADER onedrivedebug.h
     IDENTIFIER ONEDRIVE
     CATEGORY_NAME kf.kio.workers.onedrive)
 

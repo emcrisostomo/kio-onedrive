@@ -8,9 +8,9 @@
 #include "kio_gdrive.h"
 #include "gdrive_udsentry.h"
 #include "gdrivebackend.h"
-#include "gdrivedebug.h"
 #include "gdrivehelper.h"
 #include "gdriveurl.h"
+#include "onedrivedebug.h"
 #include "onedriveversion.h"
 
 #include <QApplication>
