@@ -10,7 +10,7 @@
 #include <KPropertiesDialog>
 #include <KPropertiesDialogPlugin>
 
-#include "ui_gdrivepropertiesplugin.h"
+#include "ui_onedrivepropertiesplugin.h"
 
 class GDrivePropertiesPlugin : public KPropertiesDialogPlugin
 {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
  */
 
-#include "gdrivepropertiesplugin.h"
+#include "onedrivepropertiesplugin.h"
 #include "../../gdrive_udsentry.h"
 #include "../../onedrivedebug.h"
 
@@ -15,7 +15,7 @@
 #include <QDesktopServices>
 #include <QtGlobal>
 
-K_PLUGIN_CLASS_WITH_JSON(GDrivePropertiesPlugin, "gdrivepropertiesplugin.json")
+K_PLUGIN_CLASS_WITH_JSON(GDrivePropertiesPlugin, "onedrivepropertiesplugin.json")
 
 GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVariant> &args)
     : KPropertiesDialogPlugin(parent)
@@ -106,4 +106,4 @@ void GDrivePropertiesPlugin::statJobFinished(KJob *job)
     properties->addPage(&m_widget, i18n("&OneDrive"));
 }
 
-#include "gdrivepropertiesplugin.moc"
+#include "onedrivepropertiesplugin.moc"
