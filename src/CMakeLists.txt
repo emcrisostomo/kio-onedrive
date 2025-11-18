@@ -8,7 +8,8 @@ set(kio_onedrive_SRCS
     pathcache.cpp
     abstractaccountmanager.cpp
     gdrivehelper.cpp
-    gdriveurl.cpp)
+    gdriveurl.cpp
+    onedriveclient.cpp)
 
 set(BACKEND_SRC kaccountsmanager.cpp)
 set(BACKEND_HEADER kaccountsmanager.h)

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2013-2014 Daniel Vrátil <dvratil@redhat.com>
+ * SPDX-FileCopyrightText: 2025 Enrico M. Crisostomo <enrico.crisostomo@gmail.com>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -8,6 +9,7 @@
 #ifndef KIO_GDRIVE_H
 #define KIO_GDRIVE_H
 
+#include "onedriveclient.h"
 #include "pathcache.h"
 
 #include <KGAPI/Account>
@@ -111,6 +113,8 @@ private:
     KGAPI2::AccountPtr getAccount(const QString &accountName);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
+    [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
+    [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
 
     [[nodiscard]] KIO::WorkerResult putUpdate(const QUrl &url);
     [[nodiscard]] KIO::WorkerResult putCreate(const QUrl &url);
@@ -126,6 +130,7 @@ private:
 
     std::unique_ptr<AbstractAccountManager> m_accountManager;
     PathCache m_cache;
+    OneDrive::Client m_graphClient;
 
     QMap<QString /* account */, QString /* rootId */> m_rootIds;
 };

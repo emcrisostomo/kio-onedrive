@@ -682,6 +682,59 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::rootFolderId(const QString &acc
     return {KIO::WorkerResult::pass(), *it};
 }
 
+KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
+{
+    KIO::UDSEntry entry;
+    entry.fastInsert(KIO::UDSEntry::UDS_NAME, item.name);
+    entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, item.name);
+
+    if (item.isFolder) {
+        entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
+        entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, QStringLiteral("inode/directory"));
+    } else {
+        QMimeDatabase db;
+        entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFREG);
+        entry.fastInsert(KIO::UDSEntry::UDS_SIZE, item.size);
+        const auto mime = db.mimeTypeForFile(item.name, QMimeDatabase::MatchExtension);
+        entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, mime.name());
+    }
+
+    if (item.lastModified.isValid()) {
+        entry.fastInsert(KIO::UDSEntry::UDS_MODIFICATION_TIME, item.lastModified.toSecsSinceEpoch());
+    }
+
+    entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+    return entry;
+}
+
+KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
+{
+    const auto graphResult = m_graphClient.listChildren(account->accessToken());
+    if (!graphResult.success) {
+        qCWarning(ONEDRIVE) << "Graph listChildren failed for" << accountId << graphResult.httpStatus << graphResult.errorMessage;
+        if (graphResult.httpStatus == 401 || graphResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("Failed to list OneDrive files for %1: %2", accountId, graphResult.errorMessage));
+    }
+
+    const QString pathPrefix = url.path().endsWith(QLatin1Char('/')) ? url.path() : url.path() + QLatin1Char('/');
+    for (const auto &item : graphResult.items) {
+        const KIO::UDSEntry entry = driveItemToEntry(item);
+        listEntry(entry);
+        m_cache.insertPath(pathPrefix + item.name, item.id);
+    }
+
+    KIO::UDSEntry dotEntry;
+    dotEntry.fastInsert(KIO::UDSEntry::UDS_NAME, QStringLiteral("."));
+    dotEntry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
+    dotEntry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
+    dotEntry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+    listEntry(dotEntry);
+
+    return KIO::WorkerResult::pass();
+}
+
 KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << "Going to list" << url;
@@ -705,20 +758,12 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
     }
 
-    QString folderId;
     if (gdriveUrl.isAccountRoot()) {
-        auto entry = fetchSharedDrivesRootEntry(accountId);
-        listEntry(entry);
-        const auto [result, id] = rootFolderId(accountId);
+        return listAccountRoot(url, accountId, account);
+    }
 
-        if (!result.success()) {
-            return result;
-        }
-        folderId = id;
-
-        auto sharedWithMeEntry = sharedWithMeUDSEntry();
-        listEntry(sharedWithMeEntry);
-    } else if (gdriveUrl.isSharedDrivesRoot()) {
+    QString folderId;
+    if (gdriveUrl.isSharedDrivesRoot()) {
         return listSharedDrivesRoot(url);
     } else {
         folderId = m_cache.idForPath(url.path());
