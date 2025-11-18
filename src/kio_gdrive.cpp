@@ -11,7 +11,7 @@
 #include "gdrivedebug.h"
 #include "gdrivehelper.h"
 #include "gdriveurl.h"
-#include "gdriveversion.h"
+#include "onedriveversion.h"
 
 #include <QApplication>
 #include <QMimeDatabase>
@@ -78,7 +78,7 @@ KIOGDrive::KIOGDrive(const QByteArray &protocol, const QByteArray &pool_socket, 
 
     m_accountManager.reset(new AccountManager);
 
-    qCDebug(GDRIVE) << "KIO GDrive ready: version" << GDRIVE_VERSION_STRING;
+    qCDebug(GDRIVE) << "KIO GDrive ready: version" << ONEDRIVE_VERSION_STRING;
 }
 
 KIOGDrive::~KIOGDrive()
