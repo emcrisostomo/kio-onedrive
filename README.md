@@ -1,13 +1,13 @@
-https://community.kde.org/KIO_GDrive
+https://community.kde.org/KIO_OneDrive
 
-Hello there, lonely wanderer and welcome to the magical land of Google Drive!
+Hello there, lonely wanderer and welcome to the magical land of Microsoft OneDrive!
 
 
 INSTALLATION
 ============
 
-    $ git clone git://anongit.kde.org/kio-gdrive.git
-    $ cd kio-gdrive
+    $ git clone https://invent.kde.org/network/kio-onedrive.git
+    $ cd kio-onedrive
     $ mkdir build && cd build
     $ cmake -DCMAKE_INSTALL_PREFIX=`qtpaths --install-prefix` ..
     $ sudo make install
@@ -15,26 +15,24 @@ INSTALLATION
 
 Now you are ready to use the worker. Either click the "Network" button in Dolphin or run:
 
-    $ kioclient5 exec gdrive:/
+    $ kioclient6 exec onedrive:/
 
 
 KNOWN ISSUES
 ============
 
-GDocs file don't have file size
-  Not our fault, Google Drive API simply does not return filesize of these files.
-  I think it's because they are in the Google Docs format, so the size is irrelevant,
-  since only GDocs can open them, and if we convert the files into .ODT or .DOCX or
-  whatever else, the size is different (so we would have to measure it manually)
+Some OneDrive metadata is not exposed
+  Microsoft Graph omits sizes for virtual items (Office Online placeholders, shared
+  documents that haven’t been downloaded, etc.). Those entries may show “Unknown”
+  size inside Dolphin even though they open fine in Office Online.
 
 Folders have "Unknown" size
-  We cannot provide size information on folders, so I guess this is actually implemented
-  in KIO/Dolphin by simply listing each folder and showing the number of files. This
-  is probably not done on remote filesystems to save bandwidth and improve performance,
-  hence the size is "unknown".
+  We cannot provide size information on folders, so KIO/Dolphin shows “Unknown”
+  rather than recursing through every subfolder (which would waste bandwidth and
+  be extremely slow on large cloud accounts).
 
 
 TODO
 ===========
 
-Open tasks are tracked here: https://phabricator.kde.org/tag/kio_gdrive/
+Open tasks are tracked here: https://invent.kde.org/network/kio-onedrive/-/issues
