@@ -3,7 +3,7 @@ include_directories(${CMAKE_BINARY_DIR})
 
 add_subdirectory(integration)
 
-set(kio_gdrive_SRCS
+set(kio_onedrive_SRCS
     kio_gdrive.cpp
     pathcache.cpp
     abstractaccountmanager.cpp
@@ -15,26 +15,21 @@ if (KAccounts6_FOUND)
     set(BACKEND_HEADER kaccountsmanager.h)
     set(BACKEND_CLASSNAME KAccountsManager)
     set(BACKEND_LIBS KAccounts6)
-else()
-    set(BACKEND_SRC keychainaccountmanager.cpp)
-    set(BACKEND_HEADER keychainaccountmanager.h)
-    set(BACKEND_CLASSNAME KeychainAccountManager)
-    set(BACKEND_LIBS ${QTKEYCHAIN_LIBRARIES})
 endif()
 
-set(kio_gdrive_SRCS ${kio_gdrive_SRCS} ${BACKEND_SRC})
+set(kio_onedrive_SRCS ${kio_onedrive_SRCS} ${BACKEND_SRC})
 configure_file(gdrivebackend.h.in ${CMAKE_CURRENT_BINARY_DIR}/gdrivebackend.h)
 
-ecm_qt_declare_logging_category(kio_gdrive_SRCS
+ecm_qt_declare_logging_category(kio_onedrive_SRCS
     HEADER gdrivedebug.h
-    IDENTIFIER GDRIVE
-    CATEGORY_NAME kf.kio.workers.gdrive)
+    IDENTIFIER ONEDRIVE
+    CATEGORY_NAME kf.kio.workers.onedrive)
 
-kcoreaddons_add_plugin(kio_gdrive
-    SOURCES ${kio_gdrive_SRCS}
+kcoreaddons_add_plugin(kio_onedrive
+    SOURCES ${kio_onedrive_SRCS}
     INSTALL_NAMESPACE kf6/kio)
 
-target_link_libraries(kio_gdrive
+target_link_libraries(kio_onedrive
     Qt6::Core
     Qt6::Network
     KF6::KIOCore
@@ -42,6 +37,6 @@ target_link_libraries(kio_gdrive
     KF6::I18n
     ${BACKEND_LIBS})
 
-target_link_libraries(kio_gdrive KPim6::GAPICore KPim6::GAPIDrive)
+target_link_libraries(kio_onedrive KPim6::GAPICore KPim6::GAPIDrive)
 
-set_target_properties(kio_gdrive PROPERTIES OUTPUT_NAME "gdrive")
+set_target_properties(kio_onedrive PROPERTIES OUTPUT_NAME "onedrive")
