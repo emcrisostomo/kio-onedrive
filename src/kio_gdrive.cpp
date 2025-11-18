@@ -51,7 +51,7 @@ using namespace Drive;
 class KIOPluginForMetaData : public QObject
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.kde.kio.slave.gdrive" FILE "gdrive.json")
+    Q_PLUGIN_METADATA(IID "org.kde.kio.slave.gdrive" FILE "onedrive.json")
 };
 
 extern "C" {
