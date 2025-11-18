@@ -5,3 +5,4 @@ build-overlay
 build-root
 .clang-format
 .vscode/
+compile_commands.json
