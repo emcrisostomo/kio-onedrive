@@ -2,7 +2,7 @@
 <provider id="microsoft">
   <name>Microsoft</name>
   <description>Includes Microsoft OneDrive</description>
-  <icon>onedrive</icon>
+  <icon>im-msn</icon>
   <translations>kaccounts-providers</translations>
   <domains>.*microsoftonline\.com|.*live\.com|.*microsoft\.com</domains>
 

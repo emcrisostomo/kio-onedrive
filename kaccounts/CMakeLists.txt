@@ -3,9 +3,9 @@ find_package(Intltool REQUIRED)
 
 kaccounts_add_service(${CMAKE_CURRENT_SOURCE_DIR}/onedrive.service.in)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/onedrive.provider.in.in
-    ${CMAKE_CURRENT_BINARY_DIR}/onedrive.provider.in @ONLY)
-kaccounts_add_provider(${CMAKE_CURRENT_BINARY_DIR}/onedrive.provider.in NO_INTLTOOL)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/microsoft.provider.in.in
+    ${CMAKE_CURRENT_BINARY_DIR}/microsoft.provider.in @ONLY)
+kaccounts_add_provider(${CMAKE_CURRENT_BINARY_DIR}/microsoft.provider.in NO_INTLTOOL)
 
 kcoreaddons_add_plugin(kaccounts_onedrive
     SOURCES kaccountsplugin.cpp

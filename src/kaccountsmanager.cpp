@@ -133,10 +133,16 @@ void KAccountsManager::loadAccounts()
     const auto enabledIDs = manager->accountListEnabled();
     for (const auto id : enabledIDs) {
         auto account = manager->account(id);
-        if (account->providerName() != QLatin1String("microsoft")) {
+        auto providerName = account->providerName();
+
+        qCDebug(ONEDRIVE) << "Checking account:" << account->displayName() << ", provider name:" << providerName;
+
+        if (providerName != QLatin1String("microsoft")) {
             continue;
         }
+
         qCDebug(ONEDRIVE) << "Found Microsoft-provided account:" << account->displayName();
+
         const auto services = account->enabledServices();
         for (const auto &service : services) {
             if (service.name() != QLatin1String("onedrive")) {
