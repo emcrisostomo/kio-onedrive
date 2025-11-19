@@ -586,76 +586,20 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveFileIdFromPath(const QSt
 
 QString KIOGDrive::resolveSharedDriveId(const QString &idOrName, const QString &accountId)
 {
-    qCDebug(ONEDRIVE) << "Resolving shared drive id for" << idOrName;
-
-    const auto idOrNamePath = GDriveUrl::buildSharedDrivePath(accountId, idOrName);
-    QString fileId = m_cache.idForPath(idOrNamePath);
-    if (!fileId.isEmpty()) {
-        qCDebug(ONEDRIVE) << "Resolved shared drive id" << idOrName << "to" << fileId << "(from cache)";
-        return fileId;
+    const auto account = getAccount(accountId);
+    const auto drivesResult = m_graphClient.listSharedDrives(account->accessToken());
+    if (!drivesResult.success) {
+        return QString();
     }
 
-    // We start by trying to fetch a shared drive with the filename as id
-    DrivesFetchJob searchByIdJob(idOrName, getAccount(accountId));
-    searchByIdJob.setFields({
-        Drives::Fields::Kind,
-        Drives::Fields::Id,
-        Drives::Fields::Name,
-    });
-    QEventLoop eventLoop;
-    QObject::connect(&searchByIdJob, &KGAPI2::Job::finished, &eventLoop, &QEventLoop::quit);
-    eventLoop.exec();
-    if (searchByIdJob.error() == KGAPI2::OK || searchByIdJob.error() == KGAPI2::NoError) {
-        // A Shared Drive with that id exists so we return it
-        const auto objects = searchByIdJob.items();
-        const DrivesPtr sharedDrive = objects.at(0).dynamicCast<Drives>();
-        fileId = sharedDrive->id();
-        qCDebug(ONEDRIVE) << "Resolved shared drive id" << idOrName << "to" << fileId;
-
-        const auto idPath = idOrNamePath;
-        const auto namePath = GDriveUrl::buildSharedDrivePath(accountId, sharedDrive->name());
-        m_cache.insertPath(idPath, fileId);
-        m_cache.insertPath(namePath, fileId);
-
-        return fileId;
-    }
-
-    // The gdriveUrl's filename is not a shared drive id, we must
-    // search for a shared drive with the filename name.
-    // Unfortunately searching by name is only allowed for admin
-    // accounts (i.e. useDomainAdminAccess=true) so we retrieve all
-    // shared drives and search by name here
-    DrivesFetchJob sharedDrivesFetchJob(getAccount(accountId));
-    sharedDrivesFetchJob.setFields({
-        Drives::Fields::Kind,
-        Drives::Fields::Id,
-        Drives::Fields::Name,
-    });
-    QObject::connect(&sharedDrivesFetchJob, &KGAPI2::Job::finished, &eventLoop, &QEventLoop::quit);
-    eventLoop.exec();
-    if (sharedDrivesFetchJob.error() == KGAPI2::OK || sharedDrivesFetchJob.error() == KGAPI2::NoError) {
-        const auto objects = sharedDrivesFetchJob.items();
-        for (const auto &object : objects) {
-            const DrivesPtr sharedDrive = object.dynamicCast<Drives>();
-
-            // If we have one or more hits we will take the first as good because we
-            // don't have any other measures for picking the correct drive
-            if (sharedDrive->name() == idOrName) {
-                fileId = sharedDrive->id();
-                qCDebug(ONEDRIVE) << "Resolved shared drive id" << idOrName << "to" << fileId;
-
-                const auto idPath = GDriveUrl::buildSharedDrivePath(accountId, fileId);
-                const auto namePath = idOrNamePath;
-                m_cache.insertPath(idPath, fileId);
-                m_cache.insertPath(namePath, fileId);
-
-                return fileId;
-            }
+    for (const auto &drive : drivesResult.drives) {
+        const QString pathKey = QStringLiteral("%1/%2/%3").arg(accountId, GDriveUrl::SharedDrivesDir, drive.name);
+        m_cache.insertPath(pathKey, drive.id);
+        if (drive.name == idOrName) {
+            return drive.id;
         }
     }
 
-    // We couldn't find any shared drive with that id or name
-    qCDebug(ONEDRIVE) << "Failed resolving shared drive" << idOrName << "(couldn't find drive with that id or name)";
     return QString();
 }
 

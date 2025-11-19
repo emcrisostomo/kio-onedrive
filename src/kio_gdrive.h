@@ -115,6 +115,11 @@ private:
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
     [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
     [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath);
+    [[nodiscard]] KIO::WorkerResult listFolderByDriveId(const QUrl &url,
+                                                        const QString &accountId,
+                                                        const KGAPI2::AccountPtr &account,
+                                                        const QString &driveId,
+                                                        const QString &itemId = QString());
     [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
     void cacheSharedWithMeEntries(const QString &accountId, const QList<OneDrive::DriveItem> &items);
 
@@ -135,6 +140,7 @@ private:
     OneDrive::Client m_graphClient;
 
     QMap<QString /* account */, QString /* rootId */> m_rootIds;
+    QMap<QString /* account */, QString /* driveType */> m_driveTypes;
 };
 
 #endif // KIO_GDRIVE_H
