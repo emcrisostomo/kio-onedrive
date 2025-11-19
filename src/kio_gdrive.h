@@ -125,7 +125,7 @@ private:
 
     [[nodiscard]] KIO::WorkerResult putUpdate(const QUrl &url);
     [[nodiscard]] KIO::WorkerResult putCreate(const QUrl &url);
-    [[nodiscard]] KIO::WorkerResult readPutData(QTemporaryFile &tmpFile, KGAPI2::Drive::FilePtr &file);
+    [[nodiscard]] KIO::WorkerResult readPutData(QTemporaryFile &tmpFile, const QString &fileName, QString *detectedMimeType = nullptr);
 
     /**
      * Executes a KGAPI2::Job in an event loop, retrying the job until success or failure.

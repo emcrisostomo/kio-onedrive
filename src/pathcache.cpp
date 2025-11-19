@@ -60,7 +60,11 @@ QStringList PathCache::descendants(const QString &path) const
 
 void PathCache::removePath(const QString &path)
 {
-    m_pathIdMap.remove(path);
+    if (path.startsWith(QLatin1Char('/'))) {
+        m_pathIdMap.remove(path.mid(1));
+    } else {
+        m_pathIdMap.remove(path);
+    }
 }
 
 void PathCache::dump()

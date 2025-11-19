@@ -12,6 +12,8 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 
+class QIODevice;
+
 class QNetworkReply;
 
 namespace OneDrive
@@ -58,9 +60,24 @@ struct DeleteResult {
     QString errorMessage;
 };
 
+struct UploadResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+    DriveItem item;
+};
+
 struct DriveInfo {
     QString id;
     QString name;
+};
+
+struct QuotaResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+    qint64 total = 0;
+    qint64 remaining = 0;
 };
 
 struct DrivesResult {
@@ -83,8 +100,15 @@ public:
     [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
     [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
+    [[nodiscard]] QuotaResult fetchDriveQuota(const QString &accessToken);
     [[nodiscard]] ListChildrenResult listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId = QString());
     [[nodiscard]] DeleteResult deleteItem(const QString &accessToken, const QString &itemId, const QString &driveId = QString());
+    [[nodiscard]] UploadResult
+    uploadItemByPath(const QString &accessToken, const QString &relativePath, QIODevice *source, const QString &mimeType = QString());
+    [[nodiscard]] UploadResult
+    uploadItemById(const QString &accessToken, const QString &driveId, const QString &itemId, QIODevice *source, const QString &mimeType = QString());
+    [[nodiscard]] DriveItemResult
+    updateItem(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &newName, const QString &parentPath = QString());
 
 private:
     QNetworkAccessManager m_network;

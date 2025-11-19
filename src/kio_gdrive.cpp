@@ -14,6 +14,7 @@
 #include "onedriveversion.h"
 
 #include <QApplication>
+#include <QIODevice>
 #include <QMimeDatabase>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -22,8 +23,6 @@
 #include <QUuid>
 
 #include <KGAPI/AuthJob>
-#include <KGAPI/Drive/About>
-#include <KGAPI/Drive/AboutFetchJob>
 #include <KGAPI/Drive/Drives>
 #include <KGAPI/Drive/DrivesCreateJob>
 #include <KGAPI/Drive/DrivesDeleteJob>
@@ -34,7 +33,6 @@
 #include <KGAPI/Drive/FileCreateJob>
 #include <KGAPI/Drive/FileFetchContentJob>
 #include <KGAPI/Drive/FileFetchJob>
-#include <KGAPI/Drive/FileModifyJob>
 #include <KGAPI/Drive/FileSearchQuery>
 #include <KGAPI/Drive/ParentReference>
 #include <KGAPI/Drive/Permission>
@@ -130,24 +128,27 @@ KIO::WorkerResult KIOGDrive::fileSystemFreeSpace(const QUrl &url)
 
     qCDebug(ONEDRIVE) << "Getting fileSystemFreeSpace for" << url;
     const QString accountId = gdriveUrl.account();
-    AboutFetchJob aboutFetch(getAccount(accountId));
-    aboutFetch.setFields({
-        About::Fields::Kind,
-        About::Fields::QuotaBytesTotal,
-        About::Fields::QuotaBytesUsedAggregate,
-    });
-    if (auto result = runJob(aboutFetch, url, accountId); result.success()) {
-        const AboutPtr about = aboutFetch.aboutData();
-        if (about) {
-            setMetaData(QStringLiteral("total"), QString::number(about->quotaBytesTotal()));
-            setMetaData(QStringLiteral("available"), QString::number(about->quotaBytesTotal() - about->quotaBytesUsedAggregate()));
-            return KIO::WorkerResult::pass();
-        }
-    } else {
-        return result;
+    const auto account = getAccount(accountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
     }
 
-    return KIO::WorkerResult::fail();
+    const auto quotaResult = m_graphClient.fetchDriveQuota(account->accessToken());
+    if (!quotaResult.success) {
+        if (quotaResult.httpStatus == 401 || quotaResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, quotaResult.errorMessage);
+    }
+
+    if (quotaResult.total > 0) {
+        setMetaData(QStringLiteral("total"), QString::number(quotaResult.total));
+    }
+    if (quotaResult.remaining >= 0) {
+        setMetaData(QStringLiteral("available"), QString::number(quotaResult.remaining));
+    }
+
+    return KIO::WorkerResult::pass();
 }
 
 AccountPtr KIOGDrive::getAccount(const QString &accountName)
@@ -421,24 +422,8 @@ KIO::WorkerResult KIOGDrive::statSharedDrive(const QUrl &url)
 
 KIO::UDSEntry KIOGDrive::fetchSharedDrivesRootEntry(const QString &accountId, FetchEntryFlags flags)
 {
-    // Not every user is allowed to create shared Drives,
-    // check with About resource.
-    bool canCreateDrives = false;
-    AboutFetchJob aboutFetch(getAccount(accountId));
-    aboutFetch.setFields({
-        About::Fields::Kind,
-        About::Fields::CanCreateDrives,
-    });
-    QEventLoop eventLoop;
-    QObject::connect(&aboutFetch, &KGAPI2::Job::finished, &eventLoop, &QEventLoop::quit);
-    eventLoop.exec();
-    if (aboutFetch.error() == KGAPI2::OK || aboutFetch.error() == KGAPI2::NoError) {
-        const AboutPtr about = aboutFetch.aboutData();
-        if (about) {
-            canCreateDrives = about->canCreateDrives();
-        }
-    }
-    qCDebug(ONEDRIVE) << "Account" << accountId << (canCreateDrives ? "can" : "can't") << "create Shared Drives";
+    Q_UNUSED(accountId)
+    const bool canCreateDrives = false;
 
     KIO::UDSEntry entry;
 
@@ -526,9 +511,47 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveFileIdFromPath(const QSt
         return {KIO::WorkerResult::pass(), QString()};
     }
 
+    auto isPersonalPath = [](const GDriveUrl &url) {
+        return !url.isSharedWithMeRoot() && !url.isSharedWithMe() && !url.isSharedDrivesRoot() && !url.isSharedDrive() && !url.isTrashDir() && !url.isTrashed();
+    };
+
+    if (isPersonalPath(gdriveUrl)) {
+        const QString accountId = gdriveUrl.account();
+        const auto account = getAccount(accountId);
+        if (account->accountName().isEmpty()) {
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId)), QString()};
+        }
+
+        const QStringList components = gdriveUrl.pathComponents();
+        if (components.size() < 2) {
+            return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, path), QString()};
+        }
+        const QString relativePath = components.mid(1).join(QStringLiteral("/"));
+        const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString()), QString()};
+            }
+            if (graphItem.httpStatus == 404) {
+                return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.toDisplayString()), QString()};
+            }
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage), QString()};
+        }
+
+        if ((flags & KIOGDrive::PathIsFolder) && !graphItem.item.isFolder) {
+            return {KIO::WorkerResult::fail(KIO::ERR_IS_FILE, url.toDisplayString()), QString()};
+        }
+        if ((flags & KIOGDrive::PathIsFile) && graphItem.item.isFolder) {
+            return {KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.toDisplayString()), QString()};
+        }
+
+        m_cache.insertPath(path, graphItem.item.id);
+        qCDebug(ONEDRIVE) << "Resolved" << path << "to" << graphItem.item.id << "(via Graph)";
+        return {KIO::WorkerResult::pass(), graphItem.item.id};
+    }
+
     QString parentId;
     if (!gdriveUrl.isSharedWithMeTopLevel()) {
-        // Try to recursively resolve ID of parent path - either from cache, or by querying Google
         const auto [result, id] = resolveFileIdFromPath(gdriveUrl.parentPath(), KIOGDrive::PathIsFolder);
 
         if (!result.success()) {
@@ -537,7 +560,6 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveFileIdFromPath(const QSt
         parentId = id;
 
         if (parentId.isEmpty()) {
-            // We failed to resolve parent -> error
             return {KIO::WorkerResult::pass(), QString()};
         }
         qCDebug(ONEDRIVE) << "Getting ID for" << gdriveUrl.filename() << "in parent with ID" << parentId;
@@ -601,21 +623,26 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::rootFolderId(const QString &acc
 {
     auto it = m_rootIds.constFind(accountId);
     if (it == m_rootIds.cend()) {
-        qCDebug(ONEDRIVE) << "Getting root ID for" << accountId;
-        AboutFetchJob aboutFetch(getAccount(accountId));
-        aboutFetch.setFields({About::Fields::Kind, About::Fields::RootFolderId});
-        QUrl url;
-        if (auto result = runJob(aboutFetch, url, accountId); !result.success()) {
-            return {result, QString()};
+        qCDebug(ONEDRIVE) << "Getting root ID for" << accountId << "via Graph";
+        const auto account = getAccount(accountId);
+        if (account->accountName().isEmpty()) {
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId)), QString()};
         }
 
-        const AboutPtr about = aboutFetch.aboutData();
-        if (!about || about->rootFolderId().isEmpty()) {
+        const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), QString());
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, accountId), QString()};
+            }
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage), QString()};
+        }
+
+        if (graphItem.item.id.isEmpty()) {
             qCWarning(ONEDRIVE) << "Failed to obtain root ID";
             return {KIO::WorkerResult::pass(), QString()};
         }
 
-        auto v = m_rootIds.insert(accountId, about->rootFolderId());
+        auto v = m_rootIds.insert(accountId, graphItem.item.id);
         return {KIO::WorkerResult::pass(), *v};
     }
 
@@ -1199,7 +1226,7 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
     return KIO::WorkerResult::pass();
 }
 
-KIO::WorkerResult KIOGDrive::readPutData(QTemporaryFile &tempFile, FilePtr &fileMetaData)
+KIO::WorkerResult KIOGDrive::readPutData(QTemporaryFile &tempFile, const QString &fileName, QString *detectedMimeType)
 {
     // TODO: Instead of using a temp file, upload directly the raw data (requires
     // support in LibKGAPI)
@@ -1226,10 +1253,14 @@ KIO::WorkerResult KIOGDrive::readPutData(QTemporaryFile &tempFile, FilePtr &file
         }
     } while (result > 0);
 
-    const QMimeType mime = QMimeDatabase().mimeTypeForFileNameAndData(fileMetaData->title(), &tempFile);
-    fileMetaData->setMimeType(mime.name());
+    const QMimeType mime = QMimeDatabase().mimeTypeForFileNameAndData(fileName, &tempFile);
+    if (detectedMimeType) {
+        *detectedMimeType = mime.name();
+    }
 
-    tempFile.close();
+    if (!tempFile.seek(0)) {
+        return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, tempFile.fileName());
+    }
 
     if (result == -1) {
         qCWarning(ONEDRIVE) << "Could not read source file" << tempFile.fileName();
@@ -1273,27 +1304,45 @@ KIO::WorkerResult KIOGDrive::putUpdate(const QUrl &url)
     const auto gdriveUrl = GDriveUrl(url);
     const auto accountId = gdriveUrl.account();
 
-    FileFetchJob fetchJob(fileId, getAccount(accountId));
-    if (auto result = runJob(fetchJob, url, accountId); !result.success()) {
-        return result;
+    if (fileId.isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    const ObjectsList objects = fetchJob.items();
-    if (objects.size() != 1) {
-        return putCreate(url);
+    auto isPersonalPath = [](const GDriveUrl &path) {
+        return !path.isSharedWithMeRoot() && !path.isSharedWithMe() && !path.isSharedDrivesRoot() && !path.isSharedDrive() && !path.isTrashDir()
+            && !path.isTrashed();
+    };
+
+    if (!isPersonalPath(gdriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
-    FilePtr file = objects[0].dynamicCast<File>();
+    const auto account = getAccount(accountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+    }
 
     QTemporaryFile tmpFile;
-    if (auto result = readPutData(tmpFile, file); !result.success()) {
+    QString mimeType;
+    if (auto result = readPutData(tmpFile, gdriveUrl.filename(), &mimeType); !result.success()) {
         return result;
     }
+    const auto uploadResult = m_graphClient.uploadItemById(account->accessToken(), QString(), fileId, &tmpFile, mimeType);
+    tmpFile.close();
+    if (!uploadResult.success) {
+        if (uploadResult.httpStatus == 401 || uploadResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (uploadResult.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, uploadResult.errorMessage);
+    }
 
-    FileModifyJob modifyJob(tmpFile.fileName(), file, getAccount(accountId));
-    modifyJob.setUpdateModifiedDate(true);
-    if (auto result = runJob(modifyJob, url, accountId); !result.success()) {
-        return result;
+    const QString normalizedPath = url.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedPath.isEmpty()) {
+        const QString cachedId = uploadResult.item.id.isEmpty() ? fileId : uploadResult.item.id;
+        m_cache.insertPath(normalizedPath, cachedId);
     }
 
     return KIO::WorkerResult::pass();
@@ -1302,50 +1351,72 @@ KIO::WorkerResult KIOGDrive::putUpdate(const QUrl &url)
 KIO::WorkerResult KIOGDrive::putCreate(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url;
-    ParentReferencesList parentReferences;
-
     const auto gdriveUrl = GDriveUrl(url);
     if (gdriveUrl.isRoot() || gdriveUrl.isAccountRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
     }
 
-    if (!gdriveUrl.isTopLevel()) {
-        // Not creating in root directory, fill parent references
-        QString parentId;
+    auto isPersonalPath = [](const GDriveUrl &path) {
+        return !path.isSharedWithMeRoot() && !path.isSharedWithMe() && !path.isSharedDrivesRoot() && !path.isSharedDrive() && !path.isTrashDir()
+            && !path.isTrashed();
+    };
 
-        const auto [result, id] = resolveFileIdFromPath(gdriveUrl.parentPath());
-
-        if (!result.success()) {
-            return result;
-        }
-        parentId = id;
-
-        if (parentId.isEmpty()) {
-            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.adjusted(QUrl::RemoveFilename | QUrl::StripTrailingSlash).path());
-        }
-        parentReferences << ParentReferencePtr(new ParentReference(parentId));
-    }
-
-    FilePtr file(new File);
-    file->setTitle(gdriveUrl.filename());
-    file->setParents(parentReferences);
-    /*
-    if (hasMetaData(QLatin1String("modified"))) {
-        const QString modified = metaData(QLatin1String("modified"));
-        qCDebug(ONEDRIVE) << modified;
-        file->setModifiedDate(KDateTime::fromString(modified, KDateTime::ISODate));
-    }
-    */
-
-    QTemporaryFile tmpFile;
-    if (auto result = readPutData(tmpFile, file); !result.success()) {
-        return result;
+    if (!isPersonalPath(gdriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
     const auto accountId = gdriveUrl.account();
-    FileCreateJob createJob(tmpFile.fileName(), file, getAccount(accountId));
-    if (auto result = runJob(createJob, url, accountId); !result.success()) {
+    const auto account = getAccount(accountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+    }
+
+    const QStringList components = gdriveUrl.pathComponents();
+    if (components.size() < 2) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    }
+
+    const QString relativePath = components.mid(1).join(QStringLiteral("/"));
+    auto relativeParentPath = [](const QStringList &parts) {
+        if (parts.size() <= 2) {
+            return QString();
+        }
+        return parts.mid(1, parts.size() - 2).join(QStringLiteral("/"));
+    };
+    const QString parentPath = relativeParentPath(components);
+    if (!parentPath.isEmpty()) {
+        const auto parentResult = m_graphClient.getItemByPath(account->accessToken(), parentPath);
+        if (!parentResult.success) {
+            if (parentResult.httpStatus == 401 || parentResult.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (parentResult.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, parentResult.errorMessage);
+        }
+    }
+
+    QTemporaryFile tmpFile;
+    QString mimeType;
+    if (auto result = readPutData(tmpFile, gdriveUrl.filename(), &mimeType); !result.success()) {
         return result;
+    }
+    const auto uploadResult = m_graphClient.uploadItemByPath(account->accessToken(), relativePath, &tmpFile, mimeType);
+    tmpFile.close();
+    if (!uploadResult.success) {
+        if (uploadResult.httpStatus == 401 || uploadResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (uploadResult.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, uploadResult.errorMessage);
+    }
+
+    const QString normalizedPath = url.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedPath.isEmpty() && !uploadResult.item.id.isEmpty()) {
+        m_cache.insertPath(normalizedPath, uploadResult.item.id);
     }
 
     return KIO::WorkerResult::pass();
@@ -1368,6 +1439,15 @@ KIO::WorkerResult KIOGDrive::put(const QUrl &url, int permissions, KIO::JobFlags
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_WRITE, url.path());
     }
 
+    auto isPersonalPath = [](const GDriveUrl &path) {
+        return !path.isSharedWithMeRoot() && !path.isSharedWithMe() && !path.isSharedDrivesRoot() && !path.isSharedDrive() && !path.isTrashDir()
+            && !path.isTrashed();
+    };
+
+    if (!isPersonalPath(gdriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
+    }
+
     if (QUrlQuery(url).hasQueryItem(QStringLiteral("id"))) {
         if (auto result = putUpdate(url); !result.success()) {
             return result;
@@ -1377,8 +1457,6 @@ KIO::WorkerResult KIOGDrive::put(const QUrl &url, int permissions, KIO::JobFlags
             return result;
         }
     }
-
-    // FIXME: Update the cache now!
 
     return KIO::WorkerResult::pass();
 }
@@ -1572,101 +1650,98 @@ KIO::WorkerResult KIOGDrive::rename(const QUrl &src, const QUrl &dest, KIO::JobF
     if (srcGDriveUrl.isAccountRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, dest.path());
     }
-
-    const QUrlQuery urlQuery(src);
-    QString sourceFileId;
-
-    if (urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        sourceFileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(src.adjusted(QUrl::StripTrailingSlash).path(), KIOGDrive::PathIsFile);
-        if (!result.success()) {
-            return result;
-        }
-        sourceFileId = id;
+    if (destGDriveUrl.isRoot() || destGDriveUrl.isAccountRoot() || destGDriveUrl.isNewAccountPath()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, dest.path());
     }
 
-    if (sourceFileId.isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
+    auto isPersonalPath = [](const GDriveUrl &url) {
+        return !url.isSharedWithMeRoot() && !url.isSharedWithMe() && !url.isSharedDrivesRoot() && !url.isSharedDrive() && !url.isTrashDir() && !url.isTrashed();
+    };
+
+    if (!isPersonalPath(srcGDriveUrl) || !isPersonalPath(destGDriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be renamed for now."));
     }
 
-    if (srcGDriveUrl.isSharedDrive()) {
-        qCDebug(ONEDRIVE) << "Renaming Shared Drive" << srcGDriveUrl.filename() << "to" << destGDriveUrl.filename();
-        DrivesPtr drives = DrivesPtr::create();
-        drives->setId(sourceFileId);
-        drives->setName(destGDriveUrl.filename());
+    const auto account = getAccount(sourceAccountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", sourceAccountId));
+    }
 
-        DrivesModifyJob modifyJob(drives, getAccount(sourceAccountId));
-        if (auto result = runJob(modifyJob, src, sourceAccountId); !result.success()) {
-            return result;
+    const QStringList srcComponents = srcGDriveUrl.pathComponents();
+    const QStringList destComponents = destGDriveUrl.pathComponents();
+    if (srcComponents.size() < 2 || destComponents.size() < 2) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, dest.path());
+    }
+
+    const QString srcRelativePath = srcComponents.mid(1).join(QStringLiteral("/"));
+    const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), srcRelativePath);
+    if (!graphItem.success) {
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, src.toDisplayString());
         }
+        if (graphItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+    }
 
+    const QString destName = destGDriveUrl.filename();
+    if (destName.isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, dest.path());
+    }
+
+    auto relativeParentPath = [](const QStringList &components) {
+        if (components.size() <= 2) {
+            return QString();
+        }
+        return components.mid(1, components.size() - 2).join(QStringLiteral("/"));
+    };
+
+    const QString sourceParentRelativePath = relativeParentPath(srcComponents);
+    const QString destParentRelativePath = relativeParentPath(destComponents);
+
+    const bool renameNeeded = destName != graphItem.item.name;
+    const bool moveNeeded = destParentRelativePath != sourceParentRelativePath;
+
+    if (!renameNeeded && !moveNeeded) {
         return KIO::WorkerResult::pass();
     }
 
-    // We need to fetch ALL, so that we can do update later
-    FileFetchJob sourceFileFetchJob(sourceFileId, getAccount(sourceAccountId));
-    if (auto result = runJob(sourceFileFetchJob, src, sourceAccountId); !result.success()) {
-        return result;
+    QString parentPathArgument;
+    if (moveNeeded) {
+        if (destParentRelativePath.isEmpty()) {
+            parentPathArgument = QStringLiteral("/drive/root:");
+        } else {
+            parentPathArgument = QStringLiteral("/drive/root:/") + destParentRelativePath;
+        }
     }
 
-    const ObjectsList objects = sourceFileFetchJob.items();
-    if (objects.count() != 1) {
-        qCDebug(ONEDRIVE) << "FileFetchJob retrieved" << objects.count() << "items, while only one was expected.";
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
-    }
-
-    const FilePtr sourceFile = objects[0].dynamicCast<File>();
-
-    ParentReferencesList parentReferences = sourceFile->parents();
-    if (destGDriveUrl.isRoot()) {
-        // user is trying to move to top-level onedrive:///
-        return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, dest.fileName());
-    }
-    if (destGDriveUrl.isAccountRoot()) {
-        // user is trying to move to root -> we are only renaming
-    } else {
-        // skip filename and extract the second-to-last component
-        const auto [destDirResult, destDirId] = resolveFileIdFromPath(destGDriveUrl.parentPath(), KIOGDrive::PathIsFolder);
-
-        if (!destDirResult.success()) {
-            return destDirResult;
+    const QString newNameArgument = renameNeeded ? destName : QString();
+    const auto updateResult = m_graphClient.updateItem(account->accessToken(), graphItem.item.driveId, graphItem.item.id, newNameArgument, parentPathArgument);
+    if (!updateResult.success) {
+        if (updateResult.httpStatus == 401 || updateResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, src.toDisplayString());
         }
-
-        const auto [srcDirResult, srcDirId] = resolveFileIdFromPath(srcGDriveUrl.parentPath(), KIOGDrive::PathIsFolder);
-
-        if (!srcDirResult.success()) {
-            return srcDirResult;
-        }
-
-        // Remove source from parent references
-        auto iter = parentReferences.begin();
-        bool removed = false;
-        while (iter != parentReferences.end()) {
-            const ParentReferencePtr ref = *iter;
-            if (ref->id() == srcDirId) {
-                parentReferences.erase(iter);
-                removed = true;
-                break;
-            }
-            ++iter;
-        }
-        if (!removed) {
-            qCDebug(ONEDRIVE) << "Could not remove" << src << "from parent references.";
+        if (updateResult.httpStatus == 404) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
         }
-
-        // Add destination to parent references
-        parentReferences << ParentReferencePtr(new ParentReference(destDirId));
+        if (updateResult.httpStatus == 409) {
+            return KIO::WorkerResult::fail(KIO::ERR_FILE_ALREADY_EXIST, dest.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, updateResult.errorMessage);
     }
 
-    FilePtr destFile(sourceFile);
-    destFile->setTitle(destGDriveUrl.filename());
-    destFile->setParents(parentReferences);
+    const QString normalizedSrcPath = src.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedSrcPath.isEmpty()) {
+        m_cache.removePath(normalizedSrcPath);
+    }
+    const QString normalizedDestPath = dest.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedDestPath.isEmpty()) {
+        const QString updatedId = updateResult.item.id.isEmpty() ? graphItem.item.id : updateResult.item.id;
+        m_cache.insertPath(normalizedDestPath, updatedId);
+    }
 
-    FileModifyJob modifyJob(destFile, getAccount(sourceAccountId));
-    modifyJob.setUpdateModifiedDate(true);
-    return runJob(modifyJob, dest, sourceAccountId);
+    return KIO::WorkerResult::pass();
 }
 
 KIO::WorkerResult KIOGDrive::mimetype(const QUrl &url)

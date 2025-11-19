@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QEventLoop>
+#include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -388,6 +389,43 @@ DrivesResult Client::listSharedDrives(const QString &accessToken)
     return result;
 }
 
+QuotaResult Client::fetchDriveQuota(const QString &accessToken)
+{
+    QuotaResult result;
+    if (accessToken.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com/v1.0/me/drive"));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("quota"));
+    url.setQuery(query);
+
+    QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    const QJsonObject quota = doc.object().value(QStringLiteral("quota")).toObject();
+    result.total = static_cast<qint64>(quota.value(QStringLiteral("total")).toDouble());
+    const qint64 remaining = static_cast<qint64>(quota.value(QStringLiteral("remaining")).toDouble());
+    result.remaining = remaining;
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
 ListChildrenResult Client::listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId)
 {
     ListChildrenResult result;
@@ -460,6 +498,154 @@ DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemI
         return result;
     }
 
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
+static QString effectiveMimeType(const QString &mimeType)
+{
+    return mimeType.isEmpty() ? QStringLiteral("application/octet-stream") : mimeType;
+}
+
+UploadResult Client::uploadItemByPath(const QString &accessToken, const QString &relativePath, QIODevice *source, const QString &mimeType)
+{
+    UploadResult result;
+    if (accessToken.isEmpty() || relativePath.trimmed().isEmpty() || !source) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing upload information");
+        return result;
+    }
+
+    if (!source->isOpen() && !source->open(QIODevice::ReadOnly)) {
+        result.errorMessage = QStringLiteral("Failed to open upload source");
+        return result;
+    }
+    source->seek(0);
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/content").arg(relativePath), QUrl::DecodedMode);
+
+    QNetworkRequest request = buildRequest(accessToken, url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
+
+    QNetworkReply *reply = m_network.put(request, source);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
+UploadResult Client::uploadItemById(const QString &accessToken, const QString &driveId, const QString &itemId, QIODevice *source, const QString &mimeType)
+{
+    UploadResult result;
+    if (accessToken.isEmpty() || itemId.isEmpty() || !source) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing upload information");
+        return result;
+    }
+
+    if (!source->isOpen() && !source->open(QIODevice::ReadOnly)) {
+        result.errorMessage = QStringLiteral("Failed to open upload source");
+        return result;
+    }
+    source->seek(0);
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    if (driveId.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
+    }
+
+    QNetworkRequest request = buildRequest(accessToken, url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
+
+    QNetworkReply *reply = m_network.put(request, source);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
+DriveItemResult Client::updateItem(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &newName, const QString &parentPath)
+{
+    DriveItemResult result;
+    if (accessToken.isEmpty() || itemId.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or item ID");
+        return result;
+    }
+
+    if (newName.isEmpty() && parentPath.isEmpty()) {
+        result.success = true;
+        return result;
+    }
+
+    QJsonObject payload;
+    if (!newName.isEmpty()) {
+        payload.insert(QStringLiteral("name"), newName);
+    }
+    if (!parentPath.isEmpty()) {
+        QJsonObject parentRef;
+        parentRef.insert(QStringLiteral("path"), parentPath);
+        payload.insert(QStringLiteral("parentReference"), parentRef);
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    if (driveId.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    }
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    QNetworkRequest request = buildRequest(accessToken, url);
+    const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    QNetworkReply *reply = m_network.sendCustomRequest(request, "PATCH", body);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
     result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     reply->deleteLater();
     result.success = true;
