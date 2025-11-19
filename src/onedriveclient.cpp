@@ -165,6 +165,43 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     return result;
 }
 
+DriveItemResult Client::getItemById(const QString &accessToken, const QString &driveId, const QString &itemId)
+{
+    DriveItemResult result;
+    if (accessToken.isEmpty() || driveId.isEmpty() || itemId.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive item information");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    const QNetworkRequest request = buildRequest(accessToken, url);
+    QNetworkReply *reply = m_network.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
 DownloadResult Client::downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl)
 {
     DownloadResult result;
@@ -245,6 +282,13 @@ DriveItem Client::parseItem(const QJsonObject &object) const
     item.parentId = parent.value(QStringLiteral("id")).toString();
     item.driveId = parent.value(QStringLiteral("driveId")).toString();
 
+    const QJsonObject remoteItem = object.value(QStringLiteral("remoteItem")).toObject();
+    if (!remoteItem.isEmpty()) {
+        const QJsonObject remoteParent = remoteItem.value(QStringLiteral("parentReference")).toObject();
+        item.remoteDriveId = remoteParent.value(QStringLiteral("driveId")).toString();
+        item.remoteItemId = remoteItem.value(QStringLiteral("id")).toString();
+    }
+
     const QJsonObject fileObj = object.value(QStringLiteral("file")).toObject();
     if (!fileObj.isEmpty()) {
         item.mimeType = fileObj.value(QStringLiteral("mimeType")).toString();
@@ -253,4 +297,53 @@ DriveItem Client::parseItem(const QJsonObject &object) const
     }
 
     return item;
+}
+ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
+{
+    ListChildrenResult result;
+    if (accessToken.isEmpty()) {
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
+        result.httpStatus = 401;
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    url.setPath(QStringLiteral("/v1.0/me/drive/sharedWithMe"));
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
+    query.addQueryItem(
+        QStringLiteral("$select"),
+        QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl,remoteItem,remoteItem.parentReference"));
+    url.setQuery(query);
+
+    const QNetworkRequest request = buildRequest(accessToken, url);
+    QNetworkReply *reply = m_network.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    const QJsonObject root = doc.object();
+    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
+    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
+
+    for (const QJsonValue &value : values) {
+        const QJsonObject obj = value.toObject();
+        DriveItem item = parseItem(obj.value(QStringLiteral("remoteItem")).toObject());
+        item.id = obj.value(QStringLiteral("id")).toString();
+        result.items.append(item);
+    }
+
+    reply->deleteLater();
+    result.success = true;
+    return result;
 }

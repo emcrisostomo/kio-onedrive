@@ -778,6 +778,68 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
         return listAccountRoot(url, accountId, account);
     }
 
+    if (gdriveUrl.isSharedWithMeRoot()) {
+        auto sharedWithMeEntry = sharedWithMeUDSEntry();
+        listEntry(sharedWithMeEntry);
+
+        const auto sharedItems = m_graphClient.listSharedWithMe(account->accessToken());
+        if (!sharedItems.success) {
+            qCWarning(ONEDRIVE) << "Graph sharedWithMe failed for" << accountId << sharedItems.httpStatus << sharedItems.errorMessage;
+            if (sharedItems.httpStatus == 401 || sharedItems.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, sharedItems.errorMessage);
+        }
+
+        const QString pathPrefix = url.path().endsWith(QLatin1Char('/')) ? url.path() : url.path() + QLatin1Char('/');
+        for (const auto &item : sharedItems.items) {
+            const KIO::UDSEntry entry = driveItemToEntry(item);
+            listEntry(entry);
+            m_cache.insertPath(pathPrefix + item.name, QStringLiteral("%1|%2").arg(item.remoteDriveId, item.remoteItemId));
+        }
+
+        KIO::UDSEntry dotEntry;
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_NAME, QStringLiteral("."));
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+        listEntry(dotEntry);
+        return KIO::WorkerResult::pass();
+    }
+    if (gdriveUrl.isSharedWithMe()) {
+        const QString remoteKey = m_cache.idForPath(url.path());
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+
+        const auto graphResult = m_graphClient.listChildren(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphResult.success) {
+            if (graphResult.httpStatus == 401 || graphResult.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphResult.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphResult.errorMessage);
+        }
+
+        const QString pathPrefix = url.path().endsWith(QLatin1Char('/')) ? url.path() : url.path() + QLatin1Char('/');
+        for (const auto &item : graphResult.items) {
+            const KIO::UDSEntry entry = driveItemToEntry(item);
+            listEntry(entry);
+            m_cache.insertPath(pathPrefix + item.name, QStringLiteral("%1|%2").arg(item.driveId, item.id));
+        }
+
+        KIO::UDSEntry dotEntry;
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_NAME, QStringLiteral("."));
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
+        dotEntry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+        listEntry(dotEntry);
+        return KIO::WorkerResult::pass();
+    }
+
     if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
         && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
         const auto components = gdriveUrl.pathComponents();
@@ -785,7 +847,6 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
         return listFolderByPath(url, accountId, account, relativePath);
     }
 
-    QString folderId;
     return listFolderByPath(url, accountId, account, gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/")));
 }
 
@@ -860,9 +921,34 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
+    const QString accountId = gdriveUrl.account();
+    const auto account = getAccount(accountId);
+
     if (gdriveUrl.isSharedWithMeRoot()) {
         qCDebug(ONEDRIVE) << "stat()ing Shared With Me path";
         const KIO::UDSEntry entry = sharedWithMeUDSEntry();
+        statEntry(entry);
+        return KIO::WorkerResult::pass();
+    }
+    if (gdriveUrl.isSharedWithMe()) {
+        const QString remoteKey = m_cache.idForPath(url.path());
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+
+        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        const KIO::UDSEntry entry = driveItemToEntry(graphItem.item);
         statEntry(entry);
         return KIO::WorkerResult::pass();
     }
@@ -870,8 +956,6 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
     // We are committed to stat()ing an url that belongs to
     // an account (i.e. not root or new account path), lets
     // make sure we know about the account
-    const QString accountId = gdriveUrl.account();
-    const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
         qCDebug(ONEDRIVE) << "Unknown account" << accountId << "for" << url;
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
@@ -969,6 +1053,58 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
     if (gdriveUrl.isAccountRoot()) {
         // You cannot GET an account folder!
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
+    }
+
+    if (gdriveUrl.isSharedWithMe()) {
+        const QString remoteKey = m_cache.idForPath(url.path());
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+
+        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        if (graphItem.item.isFolder) {
+            return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
+        }
+
+        if (!graphItem.item.mimeType.isEmpty()) {
+            mimeType(graphItem.item.mimeType);
+        } else {
+            QMimeDatabase db;
+            const auto mime = db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension);
+            mimeType(mime.name());
+        }
+
+        const auto downloadResult = m_graphClient.downloadItem(account->accessToken(), graphItem.item.id, graphItem.item.downloadUrl);
+        if (!downloadResult.success) {
+            if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
+        }
+
+        const QByteArray contentData = downloadResult.data;
+        processedSize(contentData.size());
+        totalSize(contentData.size());
+        int transferred = 0;
+        do {
+            const QByteArray chunk = contentData.mid(transferred, 1024 * 8);
+            data(chunk);
+            transferred += chunk.size();
+        } while (transferred < contentData.size());
+        data(QByteArray());
+
+        return KIO::WorkerResult::pass();
     }
 
     if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()

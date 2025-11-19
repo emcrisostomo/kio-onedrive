@@ -21,6 +21,8 @@ struct DriveItem {
     QString name;
     QString parentId;
     QString driveId;
+    QString remoteDriveId;
+    QString remoteItemId;
     QString mimeType;
     QString downloadUrl;
     bool isFolder = false;
@@ -59,7 +61,9 @@ public:
     [[nodiscard]] ListChildrenResult listChildren(const QString &accessToken, const QString &driveId = QString(), const QString &itemId = QString());
     [[nodiscard]] ListChildrenResult listChildrenByPath(const QString &accessToken, const QString &relativePath);
     [[nodiscard]] DriveItemResult getItemByPath(const QString &accessToken, const QString &relativePath);
+    [[nodiscard]] DriveItemResult getItemById(const QString &accessToken, const QString &driveId, const QString &itemId);
     [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
+    [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
 
 private:
     QNetworkAccessManager m_network;
