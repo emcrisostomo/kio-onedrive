@@ -52,6 +52,12 @@ struct DownloadResult {
     QByteArray data;
 };
 
+struct DeleteResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+};
+
 struct DriveInfo {
     QString id;
     QString name;
@@ -78,6 +84,7 @@ public:
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
     [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
     [[nodiscard]] ListChildrenResult listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId = QString());
+    [[nodiscard]] DeleteResult deleteItem(const QString &accessToken, const QString &itemId, const QString &driveId = QString());
 
 private:
     QNetworkAccessManager m_network;

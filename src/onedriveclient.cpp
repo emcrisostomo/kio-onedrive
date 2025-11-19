@@ -431,3 +431,37 @@ ListChildrenResult Client::listDriveChildren(const QString &accessToken, const Q
     result.success = true;
     return result;
 }
+
+DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemId, const QString &driveId)
+{
+    DeleteResult result;
+    if (accessToken.isEmpty() || itemId.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or item ID");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    if (driveId.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    }
+
+    QNetworkReply *reply = m_network.deleteResource(buildRequest(accessToken, url));
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}

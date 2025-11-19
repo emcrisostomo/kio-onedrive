@@ -24,9 +24,6 @@
 #include <KGAPI/AuthJob>
 #include <KGAPI/Drive/About>
 #include <KGAPI/Drive/AboutFetchJob>
-#include <KGAPI/Drive/ChildReference>
-#include <KGAPI/Drive/ChildReferenceCreateJob>
-#include <KGAPI/Drive/ChildReferenceFetchJob>
 #include <KGAPI/Drive/Drives>
 #include <KGAPI/Drive/DrivesCreateJob>
 #include <KGAPI/Drive/DrivesDeleteJob>
@@ -39,7 +36,6 @@
 #include <KGAPI/Drive/FileFetchJob>
 #include <KGAPI/Drive/FileModifyJob>
 #include <KGAPI/Drive/FileSearchQuery>
-#include <KGAPI/Drive/FileTrashJob>
 #include <KGAPI/Drive/ParentReference>
 #include <KGAPI/Drive/Permission>
 #include <KIO/Job>
@@ -1487,50 +1483,24 @@ KIO::WorkerResult KIOGDrive::copy(const QUrl &src, const QUrl &dest, int permiss
 
 KIO::WorkerResult KIOGDrive::del(const QUrl &url, bool isfile)
 {
-    // FIXME: Verify that a single file cannot actually have multiple parent
-    // references. If it can, then we need to be more careful: currently this
-    // implementation will simply remove the file from all it's parents but
-    // it actually should just remove the current parent reference
-
-    // FIXME: Because of the above, we are not really deleting the file, but only
-    // moving it to trash - so if users really really really wants to delete the
-    // file, they have to go to GDrive web interface and delete it there. I think
-    // that we should do the DELETE operation here, because for trash people have
-    // their local trashes. This however requires fixing the first FIXME first,
-    // otherwise we are risking severe data loss.
-
+    Q_UNUSED(isfile)
     const auto gdriveUrl = GDriveUrl(url);
 
-    // Trying to delete the Team Drive root is pointless
-    if (gdriveUrl.isSharedDrivesRoot()) {
-        qCDebug(ONEDRIVE) << "Tried deleting Shared Drives root.";
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("Can't delete Shared Drives root."));
+    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+    }
+    if (gdriveUrl.isSharedWithMe()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Deleting shared items is not supported yet."));
     }
 
-    qCDebug(ONEDRIVE) << "Deleting URL" << url << "- is it a file?" << isfile;
-
-    const QUrlQuery urlQuery(url);
-    QString fileId;
-
-    if (isfile && urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        fileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] =
-            resolveFileIdFromPath(url.adjusted(QUrl::StripTrailingSlash).path(), isfile ? KIOGDrive::PathIsFile : KIOGDrive::PathIsFolder);
-        if (!result.success()) {
-            return result;
-        }
-        fileId = id;
-    }
-
-    if (fileId.isEmpty()) {
+    if (gdriveUrl.isRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
-    const QString accountId = gdriveUrl.account();
 
-    // If user tries to delete the account folder, remove the account from the keychain
+    const QString accountId = gdriveUrl.account();
+    const auto account = getAccount(accountId);
+
     if (gdriveUrl.isAccountRoot()) {
-        const KGAPI2::AccountPtr account = getAccount(accountId);
         if (account->accountName().isEmpty()) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, accountId);
         }
@@ -1538,31 +1508,47 @@ KIO::WorkerResult KIOGDrive::del(const QUrl &url, bool isfile)
         return KIO::WorkerResult::pass();
     }
 
-    if (gdriveUrl.isSharedDrive()) {
-        qCDebug(ONEDRIVE) << "Deleting Shared Drive" << url;
-        return deleteSharedDrive(url);
+    const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+    if (!graphItem.success) {
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (graphItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
     }
 
-    // GDrive allows us to delete entire directory even when it's not empty,
-    // so we need to emulate the normal behavior ourselves by checking number of
-    // child references
-    if (!isfile) {
-        ChildReferenceFetchJob referencesFetch(fileId, getAccount(accountId));
-        if (auto result = runJob(referencesFetch, url, accountId); !result.success()) {
-            return result;
-        }
-        const bool isEmpty = !referencesFetch.items().count();
+    const QString itemId = graphItem.item.id;
+    const QString driveId = graphItem.item.driveId;
 
-        if (!isEmpty && metaData(QStringLiteral("recurse")) != QLatin1String("true")) {
+    if (graphItem.item.isFolder && metaData(QStringLiteral("recurse")) != QLatin1String("true")) {
+        const auto children = m_graphClient.listDriveChildren(account->accessToken(), driveId, itemId);
+        if (!children.success) {
+            if (children.httpStatus == 401 || children.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, children.errorMessage);
+        }
+        if (!children.items.isEmpty()) {
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_RMDIR, url.path());
         }
     }
 
-    FileTrashJob trashJob(fileId, getAccount(accountId));
+    const auto deleteResult = m_graphClient.deleteItem(account->accessToken(), itemId, driveId);
+    if (!deleteResult.success) {
+        if (deleteResult.httpStatus == 401 || deleteResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (deleteResult.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, deleteResult.errorMessage);
+    }
 
-    auto result = runJob(trashJob, url, accountId);
     m_cache.removePath(url.path());
-    return result;
+    return KIO::WorkerResult::pass();
 }
 
 KIO::WorkerResult KIOGDrive::rename(const QUrl &src, const QUrl &dest, KIO::JobFlags flags)
