@@ -87,8 +87,7 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
     }
 
     QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    const QByteArray encodedPath = QUrl::toPercentEncoding(cleanedPath, QByteArrayLiteral("/"));
-    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(QString::fromLatin1(encodedPath)));
+    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(cleanedPath), QUrl::DecodedMode);
 
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
@@ -135,8 +134,7 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     if (cleanedPath.isEmpty()) {
         url.setPath(QStringLiteral("/v1.0/me/drive/root"));
     } else {
-        const QByteArray encodedPath = QUrl::toPercentEncoding(cleanedPath, QByteArrayLiteral("/"));
-        url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:").arg(QString::fromLatin1(encodedPath)));
+        url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:").arg(cleanedPath), QUrl::DecodedMode);
     }
 
     QUrlQuery query;
