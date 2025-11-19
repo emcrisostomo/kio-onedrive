@@ -379,10 +379,8 @@ KIO::WorkerResult KIOGDrive::createSharedDrive(const QUrl &url)
 
 KIO::WorkerResult KIOGDrive::deleteSharedDrive(const QUrl &url)
 {
-    const auto gdriveUrl = GDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
-    DrivesDeleteJob sharedDriveDeleteJob(gdriveUrl.filename(), getAccount(accountId));
-    return runJob(sharedDriveDeleteJob, url, accountId);
+    Q_UNUSED(url)
+    return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
 }
 
 KIO::WorkerResult KIOGDrive::statSharedDrive(const QUrl &url)
@@ -670,9 +668,6 @@ void KIOGDrive::cacheSharedWithMeEntries(const QString &accountId, const QList<O
 
 KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
 {
-    auto sharedDrivesEntry = fetchSharedDrivesRootEntry(accountId);
-    listEntry(sharedDrivesEntry);
-
     auto sharedWithMeEntry = sharedWithMeUDSEntry();
     listEntry(sharedWithMeEntry);
 
@@ -733,6 +728,10 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
 
     if (gdriveUrl.isAccountRoot()) {
         return listAccountRoot(url, accountId, account);
+    }
+
+    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
     if (gdriveUrl.isSharedWithMeRoot()) {
@@ -828,8 +827,7 @@ KIO::WorkerResult KIOGDrive::mkdir(const QUrl &url, int permissions)
     }
 
     if (gdriveUrl.isSharedDrive()) {
-        qCDebug(ONEDRIVE) << "Directory is shared drive, creating that instead" << url;
-        return createSharedDrive(url);
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
     QString parentId;
@@ -890,6 +888,9 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
         const KIO::UDSEntry entry = sharedWithMeUDSEntry();
         statEntry(entry);
         return KIO::WorkerResult::pass();
+    }
+    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
     if (gdriveUrl.isSharedWithMe()) {
         QString remoteKey = m_cache.idForPath(url.path());
@@ -1021,6 +1022,10 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
     if (gdriveUrl.isAccountRoot()) {
         // You cannot GET an account folder!
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
+    }
+
+    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
     if (gdriveUrl.isSharedWithMe()) {
