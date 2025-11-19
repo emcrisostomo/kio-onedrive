@@ -699,8 +699,8 @@ KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
 
 KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
 {
-    auto entry = fetchSharedDrivesRootEntry(accountId);
-    listEntry(entry);
+    auto sharedDrivesEntry = fetchSharedDrivesRootEntry(accountId);
+    listEntry(sharedDrivesEntry);
 
     auto sharedWithMeEntry = sharedWithMeUDSEntry();
     listEntry(sharedWithMeEntry);
@@ -765,9 +765,6 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
     }
 
     if (gdriveUrl.isSharedWithMeRoot()) {
-        auto sharedWithMeEntry = sharedWithMeUDSEntry();
-        listEntry(sharedWithMeEntry);
-
         const auto sharedItems = m_graphClient.listSharedWithMe(account->accessToken());
         if (!sharedItems.success) {
             qCWarning(ONEDRIVE) << "Graph sharedWithMe failed for" << accountId << sharedItems.httpStatus << sharedItems.errorMessage;
