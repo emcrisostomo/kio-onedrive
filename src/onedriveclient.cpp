@@ -65,18 +65,7 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 
     for (const QJsonValue &value : values) {
         const QJsonObject obj = value.toObject();
-        DriveItem item;
-        item.id = obj.value(QStringLiteral("id")).toString();
-        item.name = obj.value(QStringLiteral("name")).toString();
-        item.size = static_cast<qint64>(obj.value(QStringLiteral("size")).toDouble());
-        item.lastModified = QDateTime::fromString(obj.value(QStringLiteral("lastModifiedDateTime")).toString(), Qt::ISODate);
-        item.isFolder = obj.contains(QStringLiteral("folder"));
-
-        const QJsonObject parent = obj.value(QStringLiteral("parentReference")).toObject();
-        item.parentId = parent.value(QStringLiteral("id")).toString();
-        item.driveId = parent.value(QStringLiteral("driveId")).toString();
-
-        result.items.append(item);
+        result.items.append(parseItem(obj));
     }
 
     result.success = true;
@@ -125,20 +114,91 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
 
     for (const QJsonValue &value : values) {
         const QJsonObject obj = value.toObject();
-        DriveItem item;
-        item.id = obj.value(QStringLiteral("id")).toString();
-        item.name = obj.value(QStringLiteral("name")).toString();
-        item.size = static_cast<qint64>(obj.value(QStringLiteral("size")).toDouble());
-        item.lastModified = QDateTime::fromString(obj.value(QStringLiteral("lastModifiedDateTime")).toString(), Qt::ISODate);
-        item.isFolder = obj.contains(QStringLiteral("folder"));
-
-        const QJsonObject parent = obj.value(QStringLiteral("parentReference")).toObject();
-        item.parentId = parent.value(QStringLiteral("id")).toString();
-        item.driveId = parent.value(QStringLiteral("driveId")).toString();
-
-        result.items.append(item);
+        result.items.append(parseItem(obj));
     }
 
+    result.success = true;
+    return result;
+}
+
+DriveItemResult Client::getItemByPath(const QString &accessToken, const QString &relativePath)
+{
+    DriveItemResult result;
+    if (accessToken.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
+        return result;
+    }
+
+    const QString cleanedPath = relativePath.trimmed();
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    if (cleanedPath.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/me/drive/root"));
+    } else {
+        const QByteArray encodedPath = QUrl::toPercentEncoding(cleanedPath, QByteArrayLiteral("/"));
+        url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:").arg(QString::fromLatin1(encodedPath)));
+    }
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    const QNetworkRequest request = buildRequest(accessToken, url);
+    QNetworkReply *reply = m_network.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
+DownloadResult Client::downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl)
+{
+    DownloadResult result;
+    QNetworkRequest request;
+
+    if (!downloadUrl.isEmpty()) {
+        request = QNetworkRequest(QUrl(downloadUrl));
+        request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    } else {
+        if (accessToken.isEmpty() || itemId.isEmpty()) {
+            result.httpStatus = 401;
+            result.errorMessage = QStringLiteral("Missing access token or item ID");
+            return result;
+        }
+        QUrl url(QStringLiteral("https://graph.microsoft.com"));
+        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
+        request = buildRequest(accessToken, url);
+    }
+
+    QNetworkReply *reply = m_network.get(request);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    result.data = reply->readAll();
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
     result.success = true;
     return result;
 }
@@ -169,4 +229,28 @@ QByteArray Client::readReply(QNetworkReply *reply, ListChildrenResult &result) c
     data = reply->readAll();
     result.success = true;
     return data;
+}
+
+DriveItem Client::parseItem(const QJsonObject &object) const
+{
+    DriveItem item;
+    item.id = object.value(QStringLiteral("id")).toString();
+    item.name = object.value(QStringLiteral("name")).toString();
+    item.size = static_cast<qint64>(object.value(QStringLiteral("size")).toDouble());
+    item.lastModified = QDateTime::fromString(object.value(QStringLiteral("lastModifiedDateTime")).toString(), Qt::ISODate);
+    item.isFolder = object.contains(QStringLiteral("folder"));
+    item.downloadUrl = object.value(QStringLiteral("@microsoft.graph.downloadUrl")).toString();
+
+    const QJsonObject parent = object.value(QStringLiteral("parentReference")).toObject();
+    item.parentId = parent.value(QStringLiteral("id")).toString();
+    item.driveId = parent.value(QStringLiteral("driveId")).toString();
+
+    const QJsonObject fileObj = object.value(QStringLiteral("file")).toObject();
+    if (!fileObj.isEmpty()) {
+        item.mimeType = fileObj.value(QStringLiteral("mimeType")).toString();
+    } else if (item.isFolder) {
+        item.mimeType = QStringLiteral("inode/directory");
+    }
+
+    return item;
 }

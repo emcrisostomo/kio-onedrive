@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QDateTime>
+#include <QJsonObject>
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QObject>
@@ -20,6 +21,8 @@ struct DriveItem {
     QString name;
     QString parentId;
     QString driveId;
+    QString mimeType;
+    QString downloadUrl;
     bool isFolder = false;
     qint64 size = 0;
     QDateTime lastModified;
@@ -33,6 +36,20 @@ struct ListChildrenResult {
     QList<DriveItem> items;
 };
 
+struct DriveItemResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+    DriveItem item;
+};
+
+struct DownloadResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+    QByteArray data;
+};
+
 class Client : public QObject
 {
     Q_OBJECT
@@ -41,11 +58,14 @@ public:
 
     [[nodiscard]] ListChildrenResult listChildren(const QString &accessToken, const QString &driveId = QString(), const QString &itemId = QString());
     [[nodiscard]] ListChildrenResult listChildrenByPath(const QString &accessToken, const QString &relativePath);
+    [[nodiscard]] DriveItemResult getItemByPath(const QString &accessToken, const QString &relativePath);
+    [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
 
 private:
     QNetworkAccessManager m_network;
 
     [[nodiscard]] QNetworkRequest buildRequest(const QString &accessToken, const QUrl &url) const;
     [[nodiscard]] QByteArray readReply(QNetworkReply *reply, ListChildrenResult &result) const;
+    [[nodiscard]] DriveItem parseItem(const QJsonObject &object) const;
 };
 }

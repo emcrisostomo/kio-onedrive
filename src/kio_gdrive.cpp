@@ -695,8 +695,12 @@ KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
         QMimeDatabase db;
         entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFREG);
         entry.fastInsert(KIO::UDSEntry::UDS_SIZE, item.size);
-        const auto mime = db.mimeTypeForFile(item.name, QMimeDatabase::MatchExtension);
-        entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, mime.name());
+        if (item.mimeType.isEmpty()) {
+            const auto mime = db.mimeTypeForFile(item.name, QMimeDatabase::MatchExtension);
+            entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, mime.name());
+        } else {
+            entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, item.mimeType);
+        }
     }
 
     if (item.lastModified.isValid()) {
@@ -946,6 +950,27 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
         return statSharedDrive(url);
     }
 
+    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
+        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
+        const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+        const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+        if (!graphItem.success) {
+            qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        const KIO::UDSEntry entry = driveItemToEntry(graphItem.item);
+        statEntry(entry);
+        m_cache.insertPath(url.path(), graphItem.item.id);
+        return KIO::WorkerResult::pass();
+    }
+
     const QUrlQuery urlQuery(url);
     QString fileId;
 
@@ -992,6 +1017,7 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
 
     const auto gdriveUrl = GDriveUrl(url);
     const QString accountId = gdriveUrl.account();
+    const auto account = getAccount(accountId);
 
     if (gdriveUrl.isRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
@@ -999,6 +1025,58 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
     if (gdriveUrl.isAccountRoot()) {
         // You cannot GET an account folder!
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
+    }
+
+    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
+        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
+        const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+        const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+        if (!graphItem.success) {
+            qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        if (graphItem.item.isFolder) {
+            return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
+        }
+
+        if (!graphItem.item.mimeType.isEmpty()) {
+            mimeType(graphItem.item.mimeType);
+        } else {
+            QMimeDatabase db;
+            const auto mime = db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension);
+            mimeType(mime.name());
+        }
+
+        const auto downloadResult = m_graphClient.downloadItem(account->accessToken(), graphItem.item.id, graphItem.item.downloadUrl);
+        if (!downloadResult.success) {
+            qCWarning(ONEDRIVE) << "Failed downloading" << relativePath << downloadResult.httpStatus << downloadResult.errorMessage;
+            if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
+        }
+
+        const QByteArray contentData = downloadResult.data;
+
+        processedSize(contentData.size());
+        totalSize(contentData.size());
+
+        int transferred = 0;
+        do {
+            const QByteArray chunk = contentData.mid(transferred, 1024 * 8);
+            data(chunk);
+            transferred += chunk.size();
+        } while (transferred < contentData.size());
+        data(QByteArray());
+
+        return KIO::WorkerResult::pass();
     }
 
     const QUrlQuery urlQuery(url);
