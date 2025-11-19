@@ -373,15 +373,8 @@ KIO::WorkerResult KIOGDrive::listSharedDrivesRoot(const QUrl &url)
 
 KIO::WorkerResult KIOGDrive::createSharedDrive(const QUrl &url)
 {
-    const auto gdriveUrl = GDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
-
-    DrivesPtr sharedDrive = DrivesPtr::create();
-    sharedDrive->setName(gdriveUrl.filename());
-
-    const QString requestId = QUuid::createUuid().toString();
-    DrivesCreateJob createJob(requestId, sharedDrive, getAccount(accountId));
-    return runJob(createJob, url, accountId);
+    Q_UNUSED(url)
+    return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Creating shared libraries is not supported."));
 }
 
 KIO::WorkerResult KIOGDrive::deleteSharedDrive(const QUrl &url)
@@ -396,28 +389,22 @@ KIO::WorkerResult KIOGDrive::statSharedDrive(const QUrl &url)
 {
     const auto gdriveUrl = GDriveUrl(url);
     const QString accountId = gdriveUrl.account();
+    const auto account = getAccount(accountId);
 
-    const auto sharedDriveId = resolveSharedDriveId(gdriveUrl.filename(), accountId);
+    const QString sharedDriveId = m_cache.idForPath(url.path());
     if (sharedDriveId.isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    DrivesFetchJob sharedDriveFetchJob(sharedDriveId, getAccount(accountId));
-    sharedDriveFetchJob.setFields({
-        Drives::Fields::Kind,
-        Drives::Fields::Id,
-        Drives::Fields::Name,
-        Drives::Fields::Hidden,
-        Drives::Fields::CreatedDate,
-        Drives::Fields::Capabilities,
-    });
-    if (auto result = runJob(sharedDriveFetchJob, url, accountId); !result.success()) {
-        return result;
+    const auto graphItem = m_graphClient.getItemById(account->accessToken(), sharedDriveId, QString());
+    if (!graphItem.success) {
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
     }
 
-    ObjectPtr object = sharedDriveFetchJob.items().at(0);
-    const DrivesPtr sharedDrive = object.dynamicCast<Drives>();
-    const auto entry = sharedDriveToUDSEntry(sharedDrive);
+    const auto entry = driveItemToEntry(graphItem.item);
     statEntry(entry);
     return KIO::WorkerResult::pass();
 }
