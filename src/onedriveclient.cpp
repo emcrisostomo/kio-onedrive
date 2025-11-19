@@ -345,3 +345,87 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
     result.success = true;
     return result;
 }
+
+DrivesResult Client::listSharedDrives(const QString &accessToken)
+{
+    DrivesResult result;
+    if (accessToken.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com/v1.0/me/drives"));
+    QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    const QJsonArray values = doc.object().value(QStringLiteral("value")).toArray();
+    for (const auto &value : values) {
+        const QJsonObject drive = value.toObject();
+        DriveInfo info;
+        info.id = drive.value(QStringLiteral("id")).toString();
+        info.name = drive.value(QStringLiteral("name")).toString();
+        if (!info.id.isEmpty()) {
+            result.drives.append(info);
+        }
+    }
+
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
+ListChildrenResult Client::listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId)
+{
+    ListChildrenResult result;
+    if (accessToken.isEmpty() || driveId.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive ID");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    if (itemId.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
+    }
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    const QByteArray payload = readReply(reply, result);
+    if (!result.success) {
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(payload);
+    const QJsonObject root = doc.object();
+    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
+    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
+
+    for (const auto &value : values) {
+        result.items.append(parseItem(value.toObject()));
+    }
+
+    result.success = true;
+    return result;
+}

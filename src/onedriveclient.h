@@ -52,6 +52,18 @@ struct DownloadResult {
     QByteArray data;
 };
 
+struct DriveInfo {
+    QString id;
+    QString name;
+};
+
+struct DrivesResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+    QList<DriveInfo> drives;
+};
+
 class Client : public QObject
 {
     Q_OBJECT
@@ -64,6 +76,8 @@ public:
     [[nodiscard]] DriveItemResult getItemById(const QString &accessToken, const QString &driveId, const QString &itemId);
     [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
+    [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
+    [[nodiscard]] ListChildrenResult listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId = QString());
 
 private:
     QNetworkAccessManager m_network;
