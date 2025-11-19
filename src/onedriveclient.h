@@ -22,6 +22,7 @@ struct DriveItem {
     QString id;
     QString name;
     QString parentId;
+    QString parentPath;
     QString driveId;
     QString remoteDriveId;
     QString remoteItemId;
@@ -111,6 +112,12 @@ public:
     [[nodiscard]] DriveItemResult
     updateItem(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &newName, const QString &parentPath = QString());
     [[nodiscard]] DriveItemResult createFolder(const QString &accessToken, const QString &driveId, const QString &parentId, const QString &name);
+    [[nodiscard]] DriveItemResult copyItem(const QString &accessToken,
+                                           const QString &driveId,
+                                           const QString &itemId,
+                                           const QString &newName,
+                                           const QString &parentPath,
+                                           const QString &destinationPath);
 
 private:
     QNetworkAccessManager m_network;

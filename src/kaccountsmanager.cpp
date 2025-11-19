@@ -175,7 +175,7 @@ AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const
 
     qCDebug(ONEDRIVE) << "Got account credentials for:" << cloudAccount->accountName()
                       << ", accessToken:" << GDriveHelper::elideToken(cloudAccount->accessToken())
-                      << ", refreshToken:" << GDriveHelper::elideToken(cloudAccount->refreshToken());
+                      << ", refreshToken:" << GDriveHelper::elideToken(cloudAccount->refreshToken()) << ", scopes:" << scopes;
 
     return cloudAccount;
 }

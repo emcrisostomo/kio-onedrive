@@ -18,6 +18,7 @@
           <setting name="RedirectUri">http://localhost/oauth2callback</setting>
           <setting name="ResponseType">code</setting>
           <setting type="as" name="Scope">[
+              'https://graph.microsoft.com/Files.ReadWrite',
               'https://graph.microsoft.com/Files.ReadWrite.All',
               'https://graph.microsoft.com/User.Read',
               'offline_access'

@@ -29,7 +29,6 @@
 #include <KGAPI/Drive/DrivesFetchJob>
 #include <KGAPI/Drive/DrivesModifyJob>
 #include <KGAPI/Drive/File>
-#include <KGAPI/Drive/FileCopyJob>
 #include <KGAPI/Drive/FileCreateJob>
 #include <KGAPI/Drive/FileFetchContentJob>
 #include <KGAPI/Drive/FileFetchJob>
@@ -1583,68 +1582,97 @@ KIO::WorkerResult KIOGDrive::copy(const QUrl &src, const QUrl &dest, int permiss
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, src.path());
     }
 
-    const QUrlQuery urlQuery(src);
-    QString sourceFileId;
+    auto isPersonalPath = [](const GDriveUrl &url) {
+        return !url.isSharedWithMeRoot() && !url.isSharedWithMe() && !url.isSharedDrivesRoot() && !url.isSharedDrive() && !url.isTrashDir() && !url.isTrashed();
+    };
 
-    if (urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        sourceFileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(src.adjusted(QUrl::StripTrailingSlash).path());
+    if (!isPersonalPath(srcGDriveUrl) || !isPersonalPath(destGDriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be copied for now."));
+    }
 
-        if (!result.success()) {
-            return result;
+    const auto account = getAccount(sourceAccountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", sourceAccountId));
+    }
+
+    const QStringList srcComponents = srcGDriveUrl.pathComponents();
+    if (srcComponents.size() < 2) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
+    }
+    const QString srcRelativePath = srcComponents.mid(1).join(QStringLiteral("/"));
+    const auto sourceItem = m_graphClient.getItemByPath(account->accessToken(), srcRelativePath);
+    if (!sourceItem.success) {
+        if (sourceItem.httpStatus == 401 || sourceItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, src.toDisplayString());
         }
-        sourceFileId = id;
+        if (sourceItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, sourceItem.errorMessage);
     }
 
-    if (sourceFileId.isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
-    }
-    FileFetchJob sourceFileFetchJob(sourceFileId, getAccount(sourceAccountId));
-    sourceFileFetchJob.setFields({File::Fields::Id, File::Fields::ModifiedDate, File::Fields::LastViewedByMeDate, File::Fields::Description});
-    if (auto result = runJob(sourceFileFetchJob, src, sourceAccountId); !result.success()) {
-        return result;
-    }
-
-    const ObjectsList objects = sourceFileFetchJob.items();
-    if (objects.count() != 1) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
-    }
-
-    const FilePtr sourceFile = objects[0].dynamicCast<File>();
-
-    ParentReferencesList destParentReferences;
     if (destGDriveUrl.isRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, dest.path());
     }
 
-    QString destDirId;
-    if (destGDriveUrl.isTopLevel()) {
-        const auto [result, id] = rootFolderId(destAccountId);
-
-        if (!result.success()) {
-            return result;
-        }
-        destDirId = id;
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(destGDriveUrl.parentPath(), KIOGDrive::PathIsFolder);
-
-        if (!result.success()) {
-            return result;
-        }
-        destDirId = id;
+    const QString destName = destGDriveUrl.filename();
+    if (destName.isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, dest.path());
     }
-    destParentReferences << ParentReferencePtr(new ParentReference(destDirId));
 
-    FilePtr destFile(new File);
-    destFile->setTitle(destGDriveUrl.filename());
-    destFile->setModifiedDate(sourceFile->modifiedDate());
-    destFile->setLastViewedByMeDate(sourceFile->lastViewedByMeDate());
-    destFile->setDescription(sourceFile->description());
-    destFile->setParents(destParentReferences);
+    const QStringList destComponents = destGDriveUrl.pathComponents();
+    auto relativeParentPath = [](const QStringList &components) {
+        if (components.size() <= 2) {
+            return QString();
+        }
+        return components.mid(1, components.size() - 2).join(QStringLiteral("/"));
+    };
+    const QString destParentPath = relativeParentPath(destComponents);
+    const auto destParentItem = m_graphClient.getItemByPath(account->accessToken(), destParentPath);
+    if (!destParentItem.success) {
+        if (destParentItem.httpStatus == 401 || destParentItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, dest.toDisplayString());
+        }
+        if (destParentItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, destGDriveUrl.parentPath());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, destParentItem.errorMessage);
+    }
 
-    FileCopyJob copyJob(sourceFile, destFile, getAccount(sourceAccountId));
-    return runJob(copyJob, dest, sourceAccountId);
+    if (!destParentItem.item.isFolder) {
+        return KIO::WorkerResult::fail(KIO::ERR_IS_FILE, destGDriveUrl.parentPath());
+    }
+
+    QString parentGraphPath;
+    if (destParentPath.isEmpty()) {
+        parentGraphPath = QStringLiteral("/drive/root:");
+    } else {
+        parentGraphPath = QStringLiteral("/drive/root:/%1").arg(destParentPath);
+    }
+
+    const QString destRelativePath = destComponents.mid(1).join(QStringLiteral("/"));
+    const auto copyResult = m_graphClient.copyItem(account->accessToken(), QString(), sourceItem.item.id, destName, parentGraphPath, destRelativePath);
+    const QString copiedItemId = copyResult.item.id;
+    if (!copyResult.success) {
+        qCWarning(ONEDRIVE) << "Graph copyItem failed for" << src << "->" << dest << copyResult.httpStatus << copyResult.errorMessage;
+        if (copyResult.httpStatus == 409) {
+            return KIO::WorkerResult::fail(KIO::ERR_FILE_ALREADY_EXIST, dest.path());
+        }
+        if (copyResult.httpStatus == 401 || copyResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, src.toDisplayString());
+        }
+        if (copyResult.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, src.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, copyResult.errorMessage);
+    }
+
+    const QString normalizedDestPath = dest.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedDestPath.isEmpty() && !copiedItemId.isEmpty()) {
+        m_cache.insertPath(normalizedDestPath, copiedItemId);
+    }
+
+    return KIO::WorkerResult::pass();
 }
 
 KIO::WorkerResult KIOGDrive::del(const QUrl &url, bool isfile)

@@ -5,8 +5,10 @@
  */
 
 #include "onedriveclient.h"
+#include "onedrivedebug.h"
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QIODevice>
 #include <QJsonArray>
@@ -14,6 +16,7 @@
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QThread>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -150,8 +153,10 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     loop.exec();
 
     if (reply->error() != QNetworkReply::NoError) {
+        const QString requestId = QString::fromUtf8(reply->rawHeader(QByteArrayLiteral("request-id")));
         result.errorMessage = reply->errorString();
         result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        qCWarning(ONEDRIVE) << "Graph copy POST failed" << url << result.httpStatus << result.errorMessage << "requestId:" << requestId;
         reply->deleteLater();
         return result;
     }
@@ -167,14 +172,18 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
 DriveItemResult Client::getItemById(const QString &accessToken, const QString &driveId, const QString &itemId)
 {
     DriveItemResult result;
-    if (accessToken.isEmpty() || driveId.isEmpty() || itemId.isEmpty()) {
+    if (accessToken.isEmpty() || itemId.isEmpty()) {
         result.httpStatus = 401;
         result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive item information");
         return result;
     }
 
     QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    if (driveId.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    }
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
     url.setQuery(query);
@@ -322,6 +331,7 @@ DriveItem Client::parseItem(const QJsonObject &object) const
 
     const QJsonObject parent = object.value(QStringLiteral("parentReference")).toObject();
     item.parentId = parent.value(QStringLiteral("id")).toString();
+    item.parentPath = parent.value(QStringLiteral("path")).toString();
     item.driveId = parent.value(QStringLiteral("driveId")).toString();
 
     const QJsonObject remoteItem = object.value(QStringLiteral("remoteItem")).toObject();
@@ -736,5 +746,175 @@ DriveItemResult Client::createFolder(const QString &accessToken, const QString &
     result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     reply->deleteLater();
     result.success = true;
+    return result;
+}
+
+DriveItemResult Client::copyItem(const QString &accessToken,
+                                 const QString &driveId,
+                                 const QString &itemId,
+                                 const QString &newName,
+                                 const QString &parentPath,
+                                 const QString &destinationPath)
+{
+    DriveItemResult result;
+    if (accessToken.isEmpty() || itemId.isEmpty() || parentPath.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or copy information");
+        return result;
+    }
+
+    QJsonObject payload;
+    if (!newName.isEmpty()) {
+        payload.insert(QStringLiteral("name"), newName);
+    }
+    QJsonObject parentRef;
+    parentRef.insert(QStringLiteral("path"), parentPath);
+    payload.insert(QStringLiteral("parentReference"), parentRef);
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    Q_UNUSED(driveId)
+    url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/copy").arg(itemId));
+
+    const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+    qCDebug(ONEDRIVE) << "Graph copy POST" << url << body;
+    QNetworkReply *reply = m_network.post(buildRequest(accessToken, url), body);
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QByteArray immediateData = reply->readAll();
+    const QString monitorUrl = QString::fromUtf8(reply->rawHeader("Location"));
+    reply->deleteLater();
+
+    if (status == 200 || status == 201) {
+        if (!immediateData.isEmpty()) {
+            result.item = parseItem(QJsonDocument::fromJson(immediateData).object());
+        }
+        result.httpStatus = status;
+        result.success = true;
+        return result;
+    }
+
+    if (status != 202 || monitorUrl.isEmpty()) {
+        result.httpStatus = status;
+        result.errorMessage = immediateData.isEmpty() ? QStringLiteral("Failed to start copy operation") : QString::fromUtf8(immediateData);
+        const QString requestId = QString::fromUtf8(reply->rawHeader(QByteArrayLiteral("request-id")));
+        qCWarning(ONEDRIVE) << "Graph copy POST unexpected response" << status << result.errorMessage << "requestId:" << requestId;
+        return result;
+    }
+
+    auto finalizeResult = [&](const QJsonObject &monitorObj) -> DriveItemResult {
+        DriveItemResult finalResult;
+        QString targetId = monitorObj.value(QStringLiteral("resourceId")).toString();
+        const QString resourceLocation = monitorObj.value(QStringLiteral("resourceLocation")).toString();
+        if (targetId.startsWith(QLatin1Char('/'))) {
+            const QStringList parts = targetId.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+            if (!parts.isEmpty()) {
+                targetId = parts.last();
+            }
+        }
+        if (!targetId.isEmpty()) {
+            finalResult = getItemById(accessToken, QString(), targetId);
+        } else if (!resourceLocation.isEmpty()) {
+            QNetworkReply *resourceReply = m_network.get(buildRequest(accessToken, QUrl(resourceLocation)));
+            QEventLoop resourceLoop;
+            connect(resourceReply, &QNetworkReply::finished, &resourceLoop, &QEventLoop::quit);
+            resourceLoop.exec();
+            if (resourceReply->error() == QNetworkReply::NoError) {
+                finalResult.item = parseItem(QJsonDocument::fromJson(resourceReply->readAll()).object());
+                finalResult.httpStatus = resourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                finalResult.success = true;
+            } else {
+                finalResult.errorMessage = resourceReply->errorString();
+                finalResult.httpStatus = resourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            }
+            resourceReply->deleteLater();
+        }
+        if (!finalResult.success && finalResult.errorMessage.isEmpty()) {
+            finalResult.errorMessage = QStringLiteral("Copy completed but destination item could not be retrieved");
+            finalResult.httpStatus = 500;
+        }
+        return finalResult;
+    };
+
+    QElapsedTimer timer;
+    timer.start();
+    const int timeoutMs = 120000;
+    const int delayMs = 500;
+
+    while (timer.elapsed() < timeoutMs) {
+        QNetworkRequest monitorRequest = buildRequest(accessToken, QUrl(monitorUrl));
+        monitorRequest.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
+        QNetworkReply *monitorReply = m_network.get(monitorRequest);
+        QEventLoop monitorLoop;
+        connect(monitorReply, &QNetworkReply::finished, &monitorLoop, &QEventLoop::quit);
+        monitorLoop.exec();
+
+        const int httpStatus = monitorReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray monitorData = monitorReply->readAll();
+        const QJsonObject monitorObj = monitorData.isEmpty() ? QJsonObject() : QJsonDocument::fromJson(monitorData).object();
+
+        if (monitorReply->error() != QNetworkReply::NoError) {
+            const QString statusValue = monitorObj.value(QStringLiteral("status")).toString();
+            if (httpStatus == 401) {
+                if (statusValue.compare(QStringLiteral("completed"), Qt::CaseInsensitive) == 0) {
+                    monitorReply->deleteLater();
+                    auto finalResult = finalizeResult(monitorObj);
+                    return finalResult;
+                }
+                const auto destinationItem = getItemByPath(accessToken, destinationPath);
+                if (destinationItem.success) {
+                    monitorReply->deleteLater();
+                    return destinationItem;
+                }
+                const QString requestId = QString::fromUtf8(monitorReply->rawHeader(QByteArrayLiteral("request-id")));
+                qCDebug(ONEDRIVE) << "Graph copy monitor returned 401, retrying" << requestId;
+                monitorReply->deleteLater();
+                QThread::msleep(delayMs);
+                continue;
+            }
+            result.errorMessage = monitorReply->errorString();
+            result.httpStatus = httpStatus;
+            const QString requestId = QString::fromUtf8(monitorReply->rawHeader(QByteArrayLiteral("request-id")));
+            qCWarning(ONEDRIVE) << "Graph copy monitor failed" << result.httpStatus << result.errorMessage << "requestId:" << requestId;
+            monitorReply->deleteLater();
+            return result;
+        }
+
+        monitorReply->deleteLater();
+
+        const QString statusValue = monitorObj.value(QStringLiteral("status")).toString();
+
+        if (statusValue.compare(QStringLiteral("completed"), Qt::CaseInsensitive) == 0) {
+            auto finalResult = finalizeResult(monitorObj);
+            return finalResult;
+        }
+
+        if (statusValue.compare(QStringLiteral("failed"), Qt::CaseInsensitive) == 0) {
+            const QJsonObject errorObj = monitorObj.value(QStringLiteral("error")).toObject();
+            result.errorMessage = errorObj.value(QStringLiteral("message")).toString();
+            if (result.errorMessage.isEmpty()) {
+                result.errorMessage = QString::fromUtf8(monitorData);
+            }
+            result.httpStatus = monitorObj.value(QStringLiteral("statusCode")).toInt();
+            if (result.httpStatus == 0) {
+                result.httpStatus = 500;
+            }
+            return result;
+        }
+
+        QThread::msleep(delayMs);
+    }
+
+    result.httpStatus = 504;
+    result.errorMessage = QStringLiteral("Timed out waiting for copy operation");
     return result;
 }
