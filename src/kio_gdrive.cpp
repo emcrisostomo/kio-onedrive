@@ -391,7 +391,23 @@ KIO::WorkerResult KIOGDrive::statSharedDrive(const QUrl &url)
     const QString accountId = gdriveUrl.account();
     const auto account = getAccount(accountId);
 
-    const QString sharedDriveId = m_cache.idForPath(url.path());
+    QString sharedDriveId = m_cache.idForPath(url.path());
+    if (sharedDriveId.isEmpty()) {
+        const auto drivesResult = m_graphClient.listSharedDrives(account->accessToken());
+        if (!drivesResult.success) {
+            if (drivesResult.httpStatus == 401 || drivesResult.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, drivesResult.errorMessage);
+        }
+        for (const auto &drive : drivesResult.drives) {
+            const QString pathKey = QStringLiteral("%1/%2/%3").arg(accountId, GDriveUrl::SharedDrivesDir, drive.name);
+            m_cache.insertPath(pathKey, drive.id);
+            if (drive.name == gdriveUrl.filename()) {
+                sharedDriveId = drive.id;
+            }
+        }
+    }
     if (sharedDriveId.isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
