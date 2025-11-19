@@ -40,6 +40,7 @@ public:
     explicit Client(QObject *parent = nullptr);
 
     [[nodiscard]] ListChildrenResult listChildren(const QString &accessToken, const QString &driveId = QString(), const QString &itemId = QString());
+    [[nodiscard]] ListChildrenResult listChildrenByPath(const QString &accessToken, const QString &relativePath);
 
 private:
     QNetworkAccessManager m_network;

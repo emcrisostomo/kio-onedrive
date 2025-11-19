@@ -709,9 +709,21 @@ KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
 
 KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
 {
-    const auto graphResult = m_graphClient.listChildren(account->accessToken());
+    auto entry = fetchSharedDrivesRootEntry(accountId);
+    listEntry(entry);
+
+    auto sharedWithMeEntry = sharedWithMeUDSEntry();
+    listEntry(sharedWithMeEntry);
+
+    return listFolderByPath(url, accountId, account, QString());
+}
+
+KIO::WorkerResult KIOGDrive::listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath)
+{
+    const auto graphResult =
+        relativePath.isEmpty() ? m_graphClient.listChildren(account->accessToken()) : m_graphClient.listChildrenByPath(account->accessToken(), relativePath);
     if (!graphResult.success) {
-        qCWarning(ONEDRIVE) << "Graph listChildren failed for" << accountId << graphResult.httpStatus << graphResult.errorMessage;
+        qCWarning(ONEDRIVE) << "Graph listChildren failed for" << accountId << relativePath << graphResult.httpStatus << graphResult.errorMessage;
         if (graphResult.httpStatus == 401 || graphResult.httpStatus == 403) {
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
         }
@@ -760,6 +772,13 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
 
     if (gdriveUrl.isAccountRoot()) {
         return listAccountRoot(url, accountId, account);
+    }
+
+    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
+        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
+        const auto components = gdriveUrl.pathComponents();
+        const QString relativePath = components.mid(1).join(QStringLiteral("/"));
+        return listFolderByPath(url, accountId, account, relativePath);
     }
 
     QString folderId;

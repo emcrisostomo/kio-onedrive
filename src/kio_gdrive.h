@@ -114,6 +114,7 @@ private:
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
     [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
+    [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath);
     [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
 
     [[nodiscard]] KIO::WorkerResult putUpdate(const QUrl &url);

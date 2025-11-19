@@ -6,6 +6,7 @@
 
 #include "onedriveclient.h"
 
+#include <QByteArray>
 #include <QEventLoop>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -14,7 +15,6 @@
 #include <QNetworkRequest>
 #include <QUrl>
 #include <QUrlQuery>
-#include <qnetworkrequest.h>
 
 using namespace OneDrive;
 
@@ -40,6 +40,66 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
     } else {
         url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
     }
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    const QNetworkRequest request = buildRequest(accessToken, url);
+    QNetworkReply *reply = m_network.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    const QByteArray payload = readReply(reply, result);
+    if (!result.success) {
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(payload);
+    const QJsonObject root = doc.object();
+    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
+    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
+
+    for (const QJsonValue &value : values) {
+        const QJsonObject obj = value.toObject();
+        DriveItem item;
+        item.id = obj.value(QStringLiteral("id")).toString();
+        item.name = obj.value(QStringLiteral("name")).toString();
+        item.size = static_cast<qint64>(obj.value(QStringLiteral("size")).toDouble());
+        item.lastModified = QDateTime::fromString(obj.value(QStringLiteral("lastModifiedDateTime")).toString(), Qt::ISODate);
+        item.isFolder = obj.contains(QStringLiteral("folder"));
+
+        const QJsonObject parent = obj.value(QStringLiteral("parentReference")).toObject();
+        item.parentId = parent.value(QStringLiteral("id")).toString();
+        item.driveId = parent.value(QStringLiteral("driveId")).toString();
+
+        result.items.append(item);
+    }
+
+    result.success = true;
+    return result;
+}
+
+ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const QString &relativePath)
+{
+    const QString cleanedPath = relativePath.trimmed();
+    if (cleanedPath.isEmpty()) {
+        return listChildren(accessToken);
+    }
+
+    ListChildrenResult result;
+    if (accessToken.isEmpty()) {
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
+        result.httpStatus = 401;
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    const QByteArray encodedPath = QUrl::toPercentEncoding(cleanedPath, QByteArrayLiteral("/"));
+    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(QString::fromLatin1(encodedPath)));
 
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
