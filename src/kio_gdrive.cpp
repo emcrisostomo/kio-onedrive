@@ -473,6 +473,66 @@ private:
 
 int RecursionDepthCounter::sDepth = 0;
 
+std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
+{
+    QString remoteKey = m_cache.idForPath(url.path());
+    if (!remoteKey.isEmpty()) {
+        return {KIO::WorkerResult::pass(), remoteKey};
+    }
+
+    const auto gdriveUrl = GDriveUrl(url);
+    const QStringList components = gdriveUrl.pathComponents();
+    if (components.size() < 3) {
+        return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
+    }
+
+    const QString shareRootPath = QStringLiteral("/%1/%2/%3").arg(accountId, GDriveUrl::SharedWithMeDir, components.at(2));
+    QString shareRootKey = m_cache.idForPath(shareRootPath);
+    if (shareRootKey.isEmpty()) {
+        const auto refreshItems = m_graphClient.listSharedWithMe(account->accessToken());
+        if (!refreshItems.success) {
+            if (refreshItems.httpStatus == 401 || refreshItems.httpStatus == 403) {
+                return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString()), QString()};
+            }
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, refreshItems.errorMessage), QString()};
+        }
+        cacheSharedWithMeEntries(accountId, refreshItems.items);
+        shareRootKey = m_cache.idForPath(shareRootPath);
+    }
+
+    if (shareRootKey.isEmpty()) {
+        return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
+    }
+
+    const QStringList rootIds = shareRootKey.split(QLatin1Char('|'));
+    if (rootIds.size() != 2) {
+        return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
+    }
+
+    const QStringList relativeComponents = components.mid(3);
+    if (relativeComponents.isEmpty()) {
+        m_cache.insertPath(url.path(), shareRootKey);
+        return {KIO::WorkerResult::pass(), shareRootKey};
+    }
+
+    const QString relativePath = relativeComponents.join(QStringLiteral("/"));
+    const auto graphItem = m_graphClient.getDriveItemByPath(account->accessToken(), rootIds.at(0), rootIds.at(1), relativePath);
+    if (!graphItem.success) {
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString()), QString()};
+        }
+        if (graphItem.httpStatus == 404) {
+            return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
+        }
+        return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage), QString()};
+    }
+
+    const QString resolvedDriveId = graphItem.item.driveId.isEmpty() ? rootIds.at(0) : graphItem.item.driveId;
+    const QString resolvedKey = QStringLiteral("%1|%2").arg(resolvedDriveId, graphItem.item.id);
+    m_cache.insertPath(url.path(), resolvedKey);
+    return {KIO::WorkerResult::pass(), resolvedKey};
+}
+
 std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveFileIdFromPath(const QString &path, PathFlags flags)
 {
     qCDebug(ONEDRIVE) << "Resolving file ID for" << path;
@@ -783,14 +843,11 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
     if (gdriveUrl.isSharedWithMe()) {
-        QString remoteKey = m_cache.idForPath(url.path());
-        if (remoteKey.isEmpty()) {
-            const auto refreshItems = m_graphClient.listSharedWithMe(account->accessToken());
-            if (refreshItems.success) {
-                cacheSharedWithMeEntries(accountId, refreshItems.items);
-                remoteKey = m_cache.idForPath(url.path());
-            }
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return keyResult;
         }
+
         const QStringList ids = remoteKey.split(QLatin1Char('|'));
         if (ids.size() != 2) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
@@ -916,14 +973,11 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
     if (gdriveUrl.isSharedWithMe()) {
-        QString remoteKey = m_cache.idForPath(url.path());
-        if (remoteKey.isEmpty()) {
-            const auto refreshItems = m_graphClient.listSharedWithMe(account->accessToken());
-            if (refreshItems.success) {
-                cacheSharedWithMeEntries(accountId, refreshItems.items);
-                remoteKey = m_cache.idForPath(url.path());
-            }
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return keyResult;
         }
+
         const QStringList ids = remoteKey.split(QLatin1Char('|'));
         if (ids.size() != 2) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
@@ -1052,14 +1106,11 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
     }
 
     if (gdriveUrl.isSharedWithMe()) {
-        QString remoteKey = m_cache.idForPath(url.path());
-        if (remoteKey.isEmpty()) {
-            const auto refreshItems = m_graphClient.listSharedWithMe(account->accessToken());
-            if (refreshItems.success) {
-                cacheSharedWithMeEntries(accountId, refreshItems.items);
-                remoteKey = m_cache.idForPath(url.path());
-            }
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return keyResult;
         }
+
         const QStringList ids = remoteKey.split(QLatin1Char('|'));
         if (ids.size() != 2) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());

@@ -100,6 +100,7 @@ public:
     [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
     [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
+    [[nodiscard]] DriveItemResult getDriveItemByPath(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &relativePath);
     [[nodiscard]] QuotaResult fetchDriveQuota(const QString &accessToken);
     [[nodiscard]] ListChildrenResult listDriveChildren(const QString &accessToken, const QString &driveId, const QString &itemId = QString());
     [[nodiscard]] DeleteResult deleteItem(const QString &accessToken, const QString &itemId, const QString &driveId = QString());

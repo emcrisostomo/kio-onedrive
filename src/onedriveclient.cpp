@@ -201,6 +201,49 @@ DriveItemResult Client::getItemById(const QString &accessToken, const QString &d
     return result;
 }
 
+DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &relativePath)
+{
+    DriveItemResult result;
+    if (accessToken.isEmpty() || driveId.isEmpty() || itemId.isEmpty()) {
+        result.httpStatus = 401;
+        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive information");
+        return result;
+    }
+
+    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    const QString cleanedPath = relativePath.trimmed();
+    if (cleanedPath.isEmpty()) {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    } else {
+        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2:/%3:").arg(driveId, itemId, cleanedPath), QUrl::DecodedMode);
+    }
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    url.setQuery(query);
+
+    const QNetworkRequest request = buildRequest(accessToken, url);
+    QNetworkReply *reply = m_network.get(request);
+
+    QEventLoop loop;
+    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    if (reply->error() != QNetworkReply::NoError) {
+        result.errorMessage = reply->errorString();
+        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        reply->deleteLater();
+        return result;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    result.item = parseItem(doc.object());
+    result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reply->deleteLater();
+    result.success = true;
+    return result;
+}
+
 DownloadResult Client::downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl)
 {
     DownloadResult result;

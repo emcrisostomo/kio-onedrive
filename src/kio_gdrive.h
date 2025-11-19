@@ -83,6 +83,7 @@ private:
     [[nodiscard]] KIO::UDSEntry fetchSharedDrivesRootEntry(const QString &accountId, FetchEntryFlags flags = FetchEntryFlags::None);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveFileIdFromPath(const QString &path, PathFlags flags = None);
+    [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
     QString resolveSharedDriveId(const QString &idOrName, const QString &accountId);
 
     struct Result {
