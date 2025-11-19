@@ -343,33 +343,32 @@ KIO::WorkerResult KIOGDrive::listSharedDrivesRoot(const QUrl &url)
 {
     const auto gdriveUrl = GDriveUrl(url);
     const QString accountId = gdriveUrl.account();
-    DrivesFetchJob sharedDrivesFetchJob(getAccount(accountId));
-    sharedDrivesFetchJob.setFields({
-        Drives::Fields::Kind,
-        Drives::Fields::Id,
-        Drives::Fields::Name,
-        Drives::Fields::Hidden,
-        Drives::Fields::CreatedDate,
-        Drives::Fields::Capabilities,
-    });
-
-    if (auto result = runJob(sharedDrivesFetchJob, url, accountId); result.success()) {
-        const auto objects = sharedDrivesFetchJob.items();
-        for (const auto &object : objects) {
-            const DrivesPtr sharedDrive = object.dynamicCast<Drives>();
-            const KIO::UDSEntry entry = sharedDriveToUDSEntry(sharedDrive);
-            listEntry(entry);
+    const auto account = getAccount(accountId);
+    const auto drivesResult = m_graphClient.listSharedDrives(account->accessToken());
+    if (!drivesResult.success) {
+        qCWarning(ONEDRIVE) << "Graph listSharedDrives failed for" << accountId << drivesResult.httpStatus << drivesResult.errorMessage;
+        if (drivesResult.httpStatus == 401 || drivesResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
         }
-
-        auto entry = fetchSharedDrivesRootEntry(accountId, FetchEntryFlags::CurrentDir);
-        listEntry(entry);
-
-        return KIO::WorkerResult::pass();
-    } else {
-        return result;
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, drivesResult.errorMessage);
     }
 
-    return KIO::WorkerResult::fail();
+    for (const auto &drive : drivesResult.drives) {
+        KIO::UDSEntry entry;
+        entry.fastInsert(KIO::UDSEntry::UDS_NAME, drive.name);
+        entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, drive.name);
+        entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
+        entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-cloud"));
+        entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+        entry.fastInsert(GDriveUDSEntryExtras::Id, drive.id);
+        listEntry(entry);
+        m_cache.insertPath(QStringLiteral("/%1/%2/%3").arg(accountId, GDriveUrl::SharedDrivesDir, drive.name), drive.id);
+    }
+
+    auto entry = fetchSharedDrivesRootEntry(accountId, FetchEntryFlags::CurrentDir);
+    listEntry(entry);
+
+    return KIO::WorkerResult::pass();
 }
 
 KIO::WorkerResult KIOGDrive::createSharedDrive(const QUrl &url)
