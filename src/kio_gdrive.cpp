@@ -786,63 +786,7 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
     }
 
     QString folderId;
-    if (gdriveUrl.isSharedDrivesRoot()) {
-        return listSharedDrivesRoot(url);
-    } else {
-        folderId = m_cache.idForPath(url.path());
-        if (folderId.isEmpty()) {
-            const auto [result, id] = resolveFileIdFromPath(url.adjusted(QUrl::StripTrailingSlash).path(), KIOGDrive::PathIsFolder);
-
-            if (!result.success()) {
-                return result;
-            }
-            folderId = id;
-        }
-        if (folderId.isEmpty()) {
-            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-        }
-    }
-
-    FileSearchQuery query;
-    query.addQuery(FileSearchQuery::Trashed, FileSearchQuery::Equals, false);
-    // Top-level Shared-with-me files don't have a parent.
-    if (gdriveUrl.isSharedWithMeRoot()) {
-        query.addQuery(FileSearchQuery::SharedWithMe, FileSearchQuery::Equals, true);
-    } else {
-        query.addQuery(FileSearchQuery::Parents, FileSearchQuery::In, folderId);
-    }
-    FileFetchJob fileFetchJob(query, getAccount(accountId));
-    const auto extraFields = QStringList({
-        KGAPI2::Drive::File::Fields::Labels,
-        KGAPI2::Drive::File::Fields::ExportLinks,
-        KGAPI2::Drive::File::Fields::LastViewedByMeDate,
-        KGAPI2::Drive::File::Fields::AlternateLink,
-    });
-    fileFetchJob.setFields(KGAPI2::Drive::FileFetchJob::FieldShorthands::basicFields() + extraFields);
-    if (auto result = runJob(fileFetchJob, url, accountId); !result.success()) {
-        return result;
-    }
-
-    const ObjectsList objects = fileFetchJob.items();
-    for (const ObjectPtr &object : objects) {
-        const FilePtr file = object.dynamicCast<File>();
-
-        const KIO::UDSEntry entry = fileToUDSEntry(file, url.adjusted(QUrl::StripTrailingSlash).path());
-        listEntry(entry);
-
-        const QString path = url.path().endsWith(QLatin1Char('/')) ? url.path() : url.path() + QLatin1Char('/');
-        m_cache.insertPath(path + file->title(), file->id());
-    }
-
-    // We also need a non-null and writable UDSentry for "."
-    KIO::UDSEntry entry;
-    entry.fastInsert(KIO::UDSEntry::UDS_NAME, QStringLiteral("."));
-    entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
-    entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
-    entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IXOTH);
-    listEntry(entry);
-
-    return KIO::WorkerResult::pass();
+    return listFolderByPath(url, accountId, account, gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/")));
 }
 
 KIO::WorkerResult KIOGDrive::mkdir(const QUrl &url, int permissions)
