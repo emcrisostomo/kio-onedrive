@@ -337,6 +337,8 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
     for (const QJsonValue &value : values) {
         const QJsonObject obj = value.toObject();
         DriveItem item = parseItem(obj.value(QStringLiteral("remoteItem")).toObject());
+        item.remoteDriveId = item.driveId;
+        item.remoteItemId = item.id;
         item.id = obj.value(QStringLiteral("id")).toString();
         result.items.append(item);
     }

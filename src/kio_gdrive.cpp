@@ -697,6 +697,17 @@ KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
     return entry;
 }
 
+void KIOGDrive::cacheSharedWithMeEntries(const QString &accountId, const QList<OneDrive::DriveItem> &items)
+{
+    const QString pathPrefix = QStringLiteral("%1/%2/").arg(accountId, GDriveUrl::SharedWithMeDir);
+    for (const auto &item : items) {
+        if (item.remoteDriveId.isEmpty() || item.remoteItemId.isEmpty()) {
+            continue;
+        }
+        m_cache.insertPath(pathPrefix + item.name, QStringLiteral("%1|%2").arg(item.remoteDriveId, item.remoteItemId));
+    }
+}
+
 KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
 {
     auto sharedDrivesEntry = fetchSharedDrivesRootEntry(accountId);
@@ -774,11 +785,11 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
             return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, sharedItems.errorMessage);
         }
 
-        const QString pathPrefix = url.path().endsWith(QLatin1Char('/')) ? url.path() : url.path() + QLatin1Char('/');
+        cacheSharedWithMeEntries(accountId, sharedItems.items);
+        const QString pathPrefix = url.path().mid(1) + (url.path().endsWith(QLatin1Char('/')) ? QString() : QStringLiteral("/"));
         for (const auto &item : sharedItems.items) {
             const KIO::UDSEntry entry = driveItemToEntry(item);
             listEntry(entry);
-            m_cache.insertPath(pathPrefix + item.name, QStringLiteral("%1|%2").arg(item.remoteDriveId, item.remoteItemId));
         }
 
         KIO::UDSEntry dotEntry;
@@ -790,7 +801,14 @@ KIO::WorkerResult KIOGDrive::listDir(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
     if (gdriveUrl.isSharedWithMe()) {
-        const QString remoteKey = m_cache.idForPath(url.path());
+        QString remoteKey = m_cache.idForPath(url.path());
+        if (remoteKey.isEmpty()) {
+            const auto refreshItems = m_graphClient.listSharedWithMe(account->accessToken());
+            if (refreshItems.success) {
+                cacheSharedWithMeEntries(accountId, refreshItems.items);
+                remoteKey = m_cache.idForPath(url.path());
+            }
+        }
         const QStringList ids = remoteKey.split(QLatin1Char('|'));
         if (ids.size() != 2) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());

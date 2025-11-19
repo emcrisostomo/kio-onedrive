@@ -116,6 +116,7 @@ private:
     [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
     [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath);
     [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
+    void cacheSharedWithMeEntries(const QString &accountId, const QList<OneDrive::DriveItem> &items);
 
     [[nodiscard]] KIO::WorkerResult putUpdate(const QUrl &url);
     [[nodiscard]] KIO::WorkerResult putCreate(const QUrl &url);
