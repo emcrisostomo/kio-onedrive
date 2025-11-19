@@ -110,6 +110,7 @@ public:
     uploadItemById(const QString &accessToken, const QString &driveId, const QString &itemId, QIODevice *source, const QString &mimeType = QString());
     [[nodiscard]] DriveItemResult
     updateItem(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &newName, const QString &parentPath = QString());
+    [[nodiscard]] DriveItemResult createFolder(const QString &accessToken, const QString &driveId, const QString &parentId, const QString &name);
 
 private:
     QNetworkAccessManager m_network;

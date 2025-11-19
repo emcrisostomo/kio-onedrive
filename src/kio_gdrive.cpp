@@ -909,36 +909,73 @@ KIO::WorkerResult KIOGDrive::mkdir(const QUrl &url, int permissions)
     if (gdriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
+    auto isPersonalPath = [](const GDriveUrl &path) {
+        return !path.isSharedWithMeRoot() && !path.isSharedWithMe() && !path.isSharedDrivesRoot() && !path.isSharedDrive() && !path.isTrashDir()
+            && !path.isTrashed();
+    };
 
-    QString parentId;
-    if (gdriveUrl.isTopLevel()) {
-        const auto [result, id] = rootFolderId(accountId);
-        if (!result.success()) {
-            return result;
-        }
-        parentId = id;
-
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(gdriveUrl.parentPath(), KIOGDrive::PathIsFolder);
-        if (!result.success()) {
-            return result;
-        }
-        parentId = id;
+    if (!isPersonalPath(gdriveUrl)) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
-    if (parentId.isEmpty()) {
+    const auto account = getAccount(accountId);
+    if (account->accountName().isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+    }
+
+    const QStringList components = gdriveUrl.pathComponents();
+    if (components.size() < 2) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    FilePtr file(new File());
-    file->setTitle(gdriveUrl.filename());
-    file->setMimeType(File::folderMimeType());
+    const QString folderName = gdriveUrl.filename();
+    if (folderName.isEmpty()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    }
 
-    ParentReferencePtr parent(new ParentReference(parentId));
-    file->setParents(ParentReferencesList() << parent);
+    auto relativeParentPath = [](const QStringList &parts) {
+        if (parts.size() <= 2) {
+            return QString();
+        }
+        return parts.mid(1, parts.size() - 2).join(QStringLiteral("/"));
+    };
 
-    FileCreateJob createJob(file, getAccount(accountId));
-    return runJob(createJob, url, accountId);
+    const QString parentRelativePath = relativeParentPath(components);
+    const auto parentItem = m_graphClient.getItemByPath(account->accessToken(), parentRelativePath);
+    if (!parentItem.success) {
+        if (parentItem.httpStatus == 401 || parentItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (parentItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, parentItem.errorMessage);
+    }
+
+    if (!parentItem.item.isFolder) {
+        return KIO::WorkerResult::fail(KIO::ERR_IS_FILE, gdriveUrl.parentPath());
+    }
+
+    const auto createResult = m_graphClient.createFolder(account->accessToken(), parentItem.item.driveId, parentItem.item.id, folderName);
+    if (!createResult.success) {
+        if (createResult.httpStatus == 401 || createResult.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (createResult.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+        }
+        if (createResult.httpStatus == 409) {
+            return KIO::WorkerResult::fail(KIO::ERR_FILE_ALREADY_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, createResult.errorMessage);
+    }
+
+    const QString normalizedPath = url.adjusted(QUrl::StripTrailingSlash).path();
+    if (!normalizedPath.isEmpty() && !createResult.item.id.isEmpty()) {
+        m_cache.insertPath(normalizedPath, createResult.item.id);
+    }
+
+    return KIO::WorkerResult::pass();
 }
 
 KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
