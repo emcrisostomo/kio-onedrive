@@ -1,23 +1,24 @@
 Hello there, lonely wanderer and welcome to the magical land of Microsoft OneDrive!
 
+# Building with kde-builder
 
-INSTALLATION
-============
+Using `kde-builder` is the recommended way to build and develop this project.
+For more information, see [KDE developer documentation](https://develop.kde.org/docs/getting-started/building/kde-builder-setup/).
 
-    $ git clone https://invent.kde.org/network/kio-onedrive.git
+# Installation
+
+    $ git clone https://github.com/emcrisostomo/kio-onedrive
     $ cd kio-onedrive
     $ mkdir build && cd build
     $ cmake -DCMAKE_INSTALL_PREFIX=`qtpaths --install-prefix` ..
     $ sudo make install
-    $ kdeinit5 # or just re-login
+    $ kbuildsycoca6 # or log out/in to reload services
 
 Now you are ready to use the worker. Either click the "Network" button in Dolphin or run:
 
-    $ kioclient6 exec onedrive:/
+    $ kioclient exec onedrive:/   # or kioclient6 on some distros
 
-
-KNOWN ISSUES
-============
+# Known issues
 
 Some OneDrive metadata is not exposed
   Microsoft Graph omits sizes for virtual items (Office Online placeholders, shared
@@ -30,7 +31,6 @@ Folders have "Unknown" size
   be extremely slow on large cloud accounts).
 
 
-TODO
-===========
+# To do
 
-Open tasks are tracked here: https://invent.kde.org/network/kio-onedrive/-/issues
+Open tasks are tracked here: https://github.com/emcrisostomo/kio-onedrive/issues
