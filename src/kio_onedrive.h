@@ -6,8 +6,8 @@
  *
  */
 
-#ifndef KIO_GDRIVE_H
-#define KIO_GDRIVE_H
+#ifndef KIO_ONEDRIVE_H
+#define KIO_ONEDRIVE_H
 
 #include "onedriveaccount.h"
 #include "onedriveclient.h"
@@ -99,4 +99,4 @@ private:
     QMap<QString /* account */, QString /* driveType */> m_driveTypes;
 };
 
-#endif // KIO_GDRIVE_H
+#endif // KIO_ONEDRIVE_H

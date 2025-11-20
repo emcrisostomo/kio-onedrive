@@ -6,7 +6,7 @@
  *
  */
 
-#include "../src/gdriveurl.h"
+#include "../src/onedriveurl.h"
 
 #include <QTest>
 
@@ -15,17 +15,17 @@ class UrlTest : public QObject
     Q_OBJECT
 
 private Q_SLOTS:
-    void testGDriveUrl_data();
-    void testGDriveUrl();
+    void testOneDriveUrl_data();
+    void testOneDriveUrl();
 };
 
 QTEST_GUILESS_MAIN(UrlTest)
 
-void UrlTest::testGDriveUrl_data()
+void UrlTest::testOneDriveUrl_data()
 {
     const auto gdriveUrl = [](const QString &path) {
         QUrl url;
-        url.setScheme(GDriveUrl::Scheme);
+        url.setScheme(OneDriveUrl::Scheme);
         url.setPath(path);
         return url;
     };
@@ -88,8 +88,8 @@ void UrlTest::testGDriveUrl_data()
             << QStringLiteral("foo@gmail.com");
 
     QTest::newRow("account trash url")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + GDriveUrl::TrashDir)
-            << QStringLiteral("onedrive:/foo@gmail.com/") + GDriveUrl::TrashDir
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + OneDriveUrl::TrashDir)
+            << QStringLiteral("onedrive:/foo@gmail.com/") + OneDriveUrl::TrashDir
             << QStringLiteral("foo@gmail.com")
             << QStringLiteral("/foo@gmail.com")
             << false // expectedIsTrashed
@@ -103,14 +103,14 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << true  // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::TrashDir}
-            << GDriveUrl::TrashDir;
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::TrashDir}
+            << OneDriveUrl::TrashDir;
 
     QTest::newRow("file in trash")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + GDriveUrl::TrashDir + QStringLiteral("/baz.txt"))
-            << QStringLiteral("onedrive:/foo@gmail.com/") + GDriveUrl::TrashDir + QStringLiteral("/baz.txt")
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + OneDriveUrl::TrashDir + QStringLiteral("/baz.txt"))
+            << QStringLiteral("onedrive:/foo@gmail.com/") + OneDriveUrl::TrashDir + QStringLiteral("/baz.txt")
             << QStringLiteral("foo@gmail.com")
-            << QStringLiteral("/foo@gmail.com/") + GDriveUrl::TrashDir
+            << QStringLiteral("/foo@gmail.com/") + OneDriveUrl::TrashDir
             << true  // expectedIsTrashed
             << false // expectedIsTopLevel
             << false // expectedIsRoot
@@ -122,12 +122,12 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::TrashDir, QStringLiteral("baz.txt")}
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::TrashDir, QStringLiteral("baz.txt")}
             << QStringLiteral("baz.txt");
 
     QTest::newRow("account shared drives url")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedDrivesDir)
-            << QStringLiteral("onedrive:/foo@gmail.com/") + GDriveUrl::SharedDrivesDir
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedDrivesDir)
+            << QStringLiteral("onedrive:/foo@gmail.com/") + OneDriveUrl::SharedDrivesDir
             << QStringLiteral("foo@gmail.com")
             << QStringLiteral("/foo@gmail.com")
             << false // expectedIsTrashed
@@ -141,8 +141,8 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedDrivesDir}
-            << GDriveUrl::SharedDrivesDir;
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedDrivesDir}
+            << OneDriveUrl::SharedDrivesDir;
 
     QTest::newRow("file in account root")
             << gdriveUrl(QStringLiteral("/foo@gmail.com/bar.txt"))
@@ -221,8 +221,8 @@ void UrlTest::testGDriveUrl_data()
             << QStringLiteral("baz.txt");
 
     QTest::newRow("account shared with me root")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedWithMeDir)
-            << QStringLiteral("onedrive:/foo@gmail.com/") + GDriveUrl::SharedWithMeDir
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir)
+            << QStringLiteral("onedrive:/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir
             << QStringLiteral("foo@gmail.com")
             << QStringLiteral("/foo@gmail.com")
             << false // expectedIsTrashed
@@ -236,14 +236,14 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedWithMeDir}
-            << GDriveUrl::SharedWithMeDir;
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedWithMeDir}
+            << OneDriveUrl::SharedWithMeDir;
 
     QTest::newRow("shared with me top-level file")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/baz.txt").arg(GDriveUrl::SharedWithMeDir))
-            << QStringLiteral("onedrive:/foo@gmail.com/%1/baz.txt").arg(GDriveUrl::SharedWithMeDir)
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/baz.txt").arg(OneDriveUrl::SharedWithMeDir))
+            << QStringLiteral("onedrive:/foo@gmail.com/%1/baz.txt").arg(OneDriveUrl::SharedWithMeDir)
             << QStringLiteral("foo@gmail.com")
-            << QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedWithMeDir
+            << QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir
             << false // expectedIsTrashed
             << false // expectedIsTopLevel
             << false // expectedIsRoot
@@ -255,14 +255,14 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedWithMeDir, QStringLiteral("baz.txt")}
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedWithMeDir, QStringLiteral("baz.txt")}
             << QStringLiteral("baz.txt");
 
     QTest::newRow("shared with me top-level folder")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/").arg(GDriveUrl::SharedWithMeDir))
-            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/").arg(GDriveUrl::SharedWithMeDir)
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/").arg(OneDriveUrl::SharedWithMeDir))
+            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/").arg(OneDriveUrl::SharedWithMeDir)
             << QStringLiteral("foo@gmail.com")
-            << QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedWithMeDir
+            << QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir
             << false // expectedIsTrashed
             << false // expectedIsTopLevel
             << false // expectedIsRoot
@@ -274,14 +274,14 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedWithMeDir, QStringLiteral("bar")}
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedWithMeDir, QStringLiteral("bar")}
             << QStringLiteral("bar");
 
     QTest::newRow("shared with me inner file")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/baz.txt").arg(GDriveUrl::SharedWithMeDir))
-            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/baz.txt").arg(GDriveUrl::SharedWithMeDir)
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/baz.txt").arg(OneDriveUrl::SharedWithMeDir))
+            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/baz.txt").arg(OneDriveUrl::SharedWithMeDir)
             << QStringLiteral("foo@gmail.com")
-            << QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedWithMeDir + QStringLiteral("/bar")
+            << QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir + QStringLiteral("/bar")
             << false // expectedIsTrashed
             << false // expectedIsTopLevel
             << false // expectedIsRoot
@@ -293,14 +293,14 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedWithMeDir, QStringLiteral("bar"), QStringLiteral("baz.txt")}
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedWithMeDir, QStringLiteral("bar"), QStringLiteral("baz.txt")}
             << QStringLiteral("baz.txt");
 
     QTest::newRow("shared with me inner folder")
-            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/baz/").arg(GDriveUrl::SharedWithMeDir))
-            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/baz/").arg(GDriveUrl::SharedWithMeDir)
+            << gdriveUrl(QStringLiteral("/foo@gmail.com/%1/bar/baz/").arg(OneDriveUrl::SharedWithMeDir))
+            << QStringLiteral("onedrive:/foo@gmail.com/%1/bar/baz/").arg(OneDriveUrl::SharedWithMeDir)
             << QStringLiteral("foo@gmail.com")
-            << QStringLiteral("/foo@gmail.com/") + GDriveUrl::SharedWithMeDir + QStringLiteral("/bar")
+            << QStringLiteral("/foo@gmail.com/") + OneDriveUrl::SharedWithMeDir + QStringLiteral("/bar")
             << false // expectedIsTrashed
             << false // expectedIsTopLevel
             << false // expectedIsRoot
@@ -312,15 +312,15 @@ void UrlTest::testGDriveUrl_data()
             << false // expectedIsSharedDrive
             << false // expectedIsNewAccountPath
             << false // expectedIsTrashDir
-            << QStringList {QStringLiteral("foo@gmail.com"), GDriveUrl::SharedWithMeDir, QStringLiteral("bar"), QStringLiteral("baz")}
+            << QStringList {QStringLiteral("foo@gmail.com"), OneDriveUrl::SharedWithMeDir, QStringLiteral("bar"), QStringLiteral("baz")}
             << QStringLiteral("baz");
     // clang-format on
 }
 
-void UrlTest::testGDriveUrl()
+void UrlTest::testOneDriveUrl()
 {
     QFETCH(QUrl, url);
-    const auto gdriveUrl = GDriveUrl(url);
+    const auto gdriveUrl = OneDriveUrl(url);
 
     QFETCH(QString, expectedToString);
     QCOMPARE(gdriveUrl.url(), QUrl(expectedToString));

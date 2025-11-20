@@ -7,22 +7,22 @@
  *
  */
 
-#include "gdriveurl.h"
+#include "onedriveurl.h"
 
-const QString GDriveUrl::Scheme = QLatin1String("onedrive");
-const QString GDriveUrl::SharedWithMeDir = QLatin1String("Shared With Me");
-const QString GDriveUrl::SharedDrivesDir = QLatin1String("Shared Drives");
-const QString GDriveUrl::TrashDir = QLatin1String("trash");
-const QString GDriveUrl::NewAccountPath = QLatin1String("new-account");
+const QString OneDriveUrl::Scheme = QLatin1String("onedrive");
+const QString OneDriveUrl::SharedWithMeDir = QLatin1String("Shared With Me");
+const QString OneDriveUrl::SharedDrivesDir = QLatin1String("Shared Drives");
+const QString OneDriveUrl::TrashDir = QLatin1String("trash");
+const QString OneDriveUrl::NewAccountPath = QLatin1String("new-account");
 
-GDriveUrl::GDriveUrl(const QUrl &url)
+OneDriveUrl::OneDriveUrl(const QUrl &url)
     : m_url(url)
 {
     const auto path = url.adjusted(QUrl::StripTrailingSlash).path();
     m_components = path.split(QLatin1Char('/'), Qt::SkipEmptyParts);
 }
 
-QString GDriveUrl::account() const
+QString OneDriveUrl::account() const
 {
     if (isRoot()) {
         return QString();
@@ -31,7 +31,7 @@ QString GDriveUrl::account() const
     return m_components.at(0);
 }
 
-QString GDriveUrl::filename() const
+QString OneDriveUrl::filename() const
 {
     if (m_components.isEmpty()) {
         return QString();
@@ -40,67 +40,67 @@ QString GDriveUrl::filename() const
     return m_components.last();
 }
 
-bool GDriveUrl::isRoot() const
+bool OneDriveUrl::isRoot() const
 {
     return m_components.isEmpty();
 }
 
-bool GDriveUrl::isAccountRoot() const
+bool OneDriveUrl::isAccountRoot() const
 {
     return m_components.length() == 1 && !isNewAccountPath();
 }
 
-bool GDriveUrl::isNewAccountPath() const
+bool OneDriveUrl::isNewAccountPath() const
 {
     return m_components.length() == 1 && m_components.at(0) == NewAccountPath;
 }
 
-bool GDriveUrl::isTopLevel() const
+bool OneDriveUrl::isTopLevel() const
 {
     return m_components.length() == 2;
 }
 
-bool GDriveUrl::isSharedWithMeRoot() const
+bool OneDriveUrl::isSharedWithMeRoot() const
 {
     return m_components.length() == 2 && m_components.at(1) == SharedWithMeDir;
 }
 
-bool GDriveUrl::isSharedWithMeTopLevel() const
+bool OneDriveUrl::isSharedWithMeTopLevel() const
 {
     return m_components.length() == 3 && m_components.at(1) == SharedWithMeDir;
 }
 
-bool GDriveUrl::isSharedWithMe() const
+bool OneDriveUrl::isSharedWithMe() const
 {
     return m_components.length() > 2 && m_components.at(1) == SharedWithMeDir;
 }
 
-bool GDriveUrl::isSharedDrivesRoot() const
+bool OneDriveUrl::isSharedDrivesRoot() const
 {
     return m_components.length() == 2 && m_components.at(1) == SharedDrivesDir;
 }
 
-bool GDriveUrl::isSharedDrive() const
+bool OneDriveUrl::isSharedDrive() const
 {
     return m_components.length() == 3 && m_components.at(1) == SharedDrivesDir;
 }
 
-bool GDriveUrl::isTrashDir() const
+bool OneDriveUrl::isTrashDir() const
 {
     return m_components.length() == 2 && m_components.at(1) == TrashDir;
 }
 
-bool GDriveUrl::isTrashed() const
+bool OneDriveUrl::isTrashed() const
 {
     return m_components.length() > 2 && m_components.at(1) == TrashDir;
 }
 
-QUrl GDriveUrl::url() const
+QUrl OneDriveUrl::url() const
 {
     return m_url;
 }
 
-QString GDriveUrl::parentPath() const
+QString OneDriveUrl::parentPath() const
 {
     if (isRoot()) {
         return QString();
@@ -112,12 +112,12 @@ QString GDriveUrl::parentPath() const
     return QLatin1Char('/') + path.join(QLatin1Char('/'));
 }
 
-QStringList GDriveUrl::pathComponents() const
+QStringList OneDriveUrl::pathComponents() const
 {
     return m_components;
 }
 
-QString GDriveUrl::buildSharedDrivePath(const QString &accountId, const QString &drive)
+QString OneDriveUrl::buildSharedDrivePath(const QString &accountId, const QString &drive)
 {
     return QStringLiteral("/%1/%2/%3").arg(accountId, SharedDrivesDir, drive);
 }

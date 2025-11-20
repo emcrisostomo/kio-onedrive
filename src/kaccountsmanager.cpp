@@ -145,7 +145,7 @@ void KAccountsManager::loadAccounts()
             if (service.name() != QLatin1String("onedrive")) {
                 continue;
             }
-            qCDebug(ONEDRIVE) << account->displayName() << "supports onedrive!";
+            qCDebug(ONEDRIVE) << account->displayName() << "supports OneDrive service.";
 
             auto cloudAccount = getAccountCredentials(id, account->displayName());
             m_accounts.insert(id, cloudAccount);

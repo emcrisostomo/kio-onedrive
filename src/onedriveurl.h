@@ -7,15 +7,15 @@
  *
  */
 
-#ifndef GDRIVEURL_U
-#define GDRIVEURL_U
+#ifndef ONEDRIVEURL_U
+#define ONEDRIVEURL_U
 
 #include <QUrl>
 
-class GDriveUrl
+class OneDriveUrl
 {
 public:
-    explicit GDriveUrl(const QUrl &url);
+    explicit OneDriveUrl(const QUrl &url);
 
     QString account() const;
     QString filename() const;
@@ -47,4 +47,4 @@ private:
     QStringList m_components;
 };
 
-#endif // GDRIVEURL_U
+#endif // ONEDRIVEURL_U

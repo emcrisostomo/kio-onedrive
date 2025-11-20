@@ -4,10 +4,10 @@ include_directories(${CMAKE_BINARY_DIR})
 add_subdirectory(integration)
 
 set(kio_onedrive_SRCS
-    kio_gdrive.cpp
+    kio_onedrive.cpp
     pathcache.cpp
     abstractaccountmanager.cpp
-    gdriveurl.cpp
+    onedriveurl.cpp
     onedriveclient.cpp)
 
 set(BACKEND_SRC kaccountsmanager.cpp)
@@ -16,7 +16,7 @@ set(BACKEND_CLASSNAME KAccountsManager)
 set(BACKEND_LIBS KAccounts6)
 
 set(kio_onedrive_SRCS ${kio_onedrive_SRCS} ${BACKEND_SRC})
-configure_file(gdrivebackend.h.in ${CMAKE_CURRENT_BINARY_DIR}/gdrivebackend.h)
+configure_file(onedrivebackend.h.in ${CMAKE_CURRENT_BINARY_DIR}/onedrivebackend.h)
 
 ecm_qt_declare_logging_category(kio_onedrive_SRCS
     HEADER onedrivedebug.h

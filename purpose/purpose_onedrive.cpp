@@ -6,7 +6,7 @@
  *
  */
 
-#include "gdrivejob.h"
+#include "onedrivejob.h"
 #include <purpose/pluginbase.h>
 
 #include <KPluginFactory>

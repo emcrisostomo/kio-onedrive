@@ -1,7 +1,7 @@
 include(ECMAddTests)
 
 ecm_add_test(
-    urltest.cpp ../src/gdriveurl.cpp
+    urltest.cpp ../src/onedriveurl.cpp
     LINK_LIBRARIES Qt::Test
     TEST_NAME urltest
     NAME_PREFIX kio_onedrive-)
