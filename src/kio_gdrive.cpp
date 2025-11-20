@@ -1864,38 +1864,78 @@ KIO::WorkerResult KIOGDrive::mimetype(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url;
 
-    const QUrlQuery urlQuery(url);
-    QString fileId;
+    const auto gdriveUrl = GDriveUrl(url);
+    const QString accountId = gdriveUrl.account();
+    const auto account = getAccount(accountId);
 
-    if (urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        fileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(url.adjusted(QUrl::StripTrailingSlash).path());
+    if (gdriveUrl.isRoot() || gdriveUrl.isAccountRoot() || gdriveUrl.isNewAccountPath()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    }
+    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+    }
 
-        if (!result.success()) {
-            return result;
+    auto emitMime = [&](const QString &name) {
+        if (!name.isEmpty()) {
+            mimeType(name);
+            return true;
         }
-        fileId = id;
+        return false;
+    };
+
+    if (gdriveUrl.isSharedWithMe()) {
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return keyResult;
+        }
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+
+        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        if (graphItem.item.isFolder) {
+            return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
+        }
+
+        if (!emitMime(graphItem.item.mimeType)) {
+            QMimeDatabase db;
+            emitMime(db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension).name());
+        }
+        return KIO::WorkerResult::pass();
     }
 
-    if (fileId.isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-    }
-    const QString accountId = GDriveUrl(url).account();
-
-    FileFetchJob fileFetchJob(fileId, getAccount(accountId));
-    fileFetchJob.setFields({File::Fields::Id, File::Fields::MimeType});
-    if (auto result = runJob(fileFetchJob, url, accountId); !result.success()) {
-        return result;
-    }
-
-    const ObjectsList objects = fileFetchJob.items();
-    if (objects.count() != 1) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+    if (!graphItem.success) {
+        qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+        }
+        if (graphItem.httpStatus == 404) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
     }
 
-    const FilePtr file = objects.first().dynamicCast<File>();
-    mimeType(file->mimeType());
+    if (graphItem.item.isFolder) {
+        return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
+    }
+
+    if (!emitMime(graphItem.item.mimeType)) {
+        QMimeDatabase db;
+        emitMime(db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension).name());
+    }
     return KIO::WorkerResult::pass();
 }
 
