@@ -79,7 +79,7 @@ KIO::WorkerResult KIOOneDrive::fileSystemFreeSpace(const QUrl &url)
     const QString accountId = gdriveUrl.account();
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     const auto quotaResult = m_graphClient.fetchDriveQuota(account->accessToken());
@@ -107,7 +107,7 @@ OneDriveAccountPtr KIOOneDrive::getAccount(const QString &accountName)
 
 KIO::WorkerResult KIOOneDrive::openConnection()
 {
-    qCDebug(ONEDRIVE) << "Ready to talk to GDrive";
+    qCDebug(ONEDRIVE) << "Ready to talk to OneDrive";
     return KIO::WorkerResult::pass();
 }
 
@@ -438,7 +438,7 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveFileIdFromPath(const Q
         const QString accountId = gdriveUrl.account();
         const auto account = getAccount(accountId);
         if (account->accountName().isEmpty()) {
-            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId)), QString()};
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId)), QString()};
         }
 
         const QStringList components = gdriveUrl.pathComponents();
@@ -498,7 +498,7 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::rootFolderId(const QString &a
         qCDebug(ONEDRIVE) << "Getting root ID for" << accountId << "via Graph";
         const auto account = getAccount(accountId);
         if (account->accountName().isEmpty()) {
-            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId)), QString()};
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId)), QString()};
         }
 
         const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), QString());
@@ -634,7 +634,7 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
         qCDebug(ONEDRIVE) << "Unknown account" << accountId << "for" << url;
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     if (gdriveUrl.isAccountRoot()) {
@@ -720,7 +720,7 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
 
 KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
 {
-    // NOTE: We deliberately ignore the permissions field here, because GDrive
+    // NOTE: We deliberately ignore the permissions field here, because OneDrive
     // does not recognize any privileges that could be mapped to standard UNIX
     // file permissions.
     Q_UNUSED(permissions);
@@ -748,7 +748,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
 
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     const QStringList components = gdriveUrl.pathComponents();
@@ -869,7 +869,7 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
     // make sure we know about the account
     if (account->accountName().isEmpty()) {
         qCDebug(ONEDRIVE) << "Unknown account" << accountId << "for" << url;
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     if (gdriveUrl.isAccountRoot()) {
@@ -1157,7 +1157,7 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
 
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     QTemporaryFile tmpFile;
@@ -1206,7 +1206,7 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
     const auto accountId = gdriveUrl.account();
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", accountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
     const QStringList components = gdriveUrl.pathComponents();
@@ -1262,7 +1262,7 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
 
 KIO::WorkerResult KIOOneDrive::put(const QUrl &url, int permissions, KIO::JobFlags flags)
 {
-    // NOTE: We deliberately ignore the permissions field here, because GDrive
+    // NOTE: We deliberately ignore the permissions field here, because OneDrive
     // does not recognize any privileges that could be mapped to standard UNIX
     // file permissions.
     Q_UNUSED(permissions)
@@ -1303,13 +1303,13 @@ KIO::WorkerResult KIOOneDrive::copy(const QUrl &src, const QUrl &dest, int permi
 {
     qCDebug(ONEDRIVE) << "Going to copy" << src << "to" << dest;
 
-    // NOTE: We deliberately ignore the permissions field here, because GDrive
+    // NOTE: We deliberately ignore the permissions field here, because OneDrive
     // does not recognize any privileges that could be mapped to standard UNIX
     // file permissions.
     Q_UNUSED(permissions);
 
     // NOTE: We deliberately ignore the flags field here, because the "overwrite"
-    // flag would have no effect on GDrive, since file name don't have to be
+    // flag would have no effect on OneDrive, since file name don't have to be
     // unique. IOW if there is a file "foo.bar" and user copy-pastes into the
     // same directory, the FileCopyJob will succeed and a new file with the same
     // name will be created.
@@ -1343,7 +1343,7 @@ KIO::WorkerResult KIOOneDrive::copy(const QUrl &src, const QUrl &dest, int permi
 
     const auto account = getAccount(sourceAccountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", sourceAccountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", sourceAccountId));
     }
 
     const QStringList srcComponents = srcOneDriveUrl.pathComponents();
@@ -1531,7 +1531,7 @@ KIO::WorkerResult KIOOneDrive::rename(const QUrl &src, const QUrl &dest, KIO::Jo
 
     const auto account = getAccount(sourceAccountId);
     if (account->accountName().isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known GDrive account", sourceAccountId));
+        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", sourceAccountId));
     }
 
     const QStringList srcComponents = srcOneDriveUrl.pathComponents();
