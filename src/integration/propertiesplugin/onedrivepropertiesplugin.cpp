@@ -15,9 +15,9 @@
 #include <QDesktopServices>
 #include <QtGlobal>
 
-K_PLUGIN_CLASS_WITH_JSON(GDrivePropertiesPlugin, "onedrivepropertiesplugin.json")
+K_PLUGIN_CLASS_WITH_JSON(OneDrivePropertiesPlugin, "onedrivepropertiesplugin.json")
 
-GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVariant> &args)
+OneDrivePropertiesPlugin::OneDrivePropertiesPlugin(QObject *parent, const QList<QVariant> &args)
     : KPropertiesDialogPlugin(parent)
 {
     Q_UNUSED(args)
@@ -42,10 +42,10 @@ GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVar
 
     // Re stat() the item because the entry is probably lacking required information.
     const KIO::StatJob *job = KIO::stat(m_item.url(), KIO::HideProgressInfo);
-    connect(job, &KJob::finished, this, &GDrivePropertiesPlugin::statJobFinished);
+    connect(job, &KJob::finished, this, &OneDrivePropertiesPlugin::statJobFinished);
 }
 
-void GDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
+void OneDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
 {
     const QString id = entry.stringValue(OneDriveUDSEntryExtras::Id);
     m_ui.idValue->setText(id);
@@ -93,7 +93,7 @@ void GDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
     });
 }
 
-void GDrivePropertiesPlugin::statJobFinished(KJob *job)
+void OneDrivePropertiesPlugin::statJobFinished(KJob *job)
 {
     KIO::StatJob *statJob = qobject_cast<KIO::StatJob *>(job);
     if (!statJob || statJob->error()) {

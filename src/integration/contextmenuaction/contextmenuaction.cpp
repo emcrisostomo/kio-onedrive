@@ -18,14 +18,14 @@
 #include <KLocalizedString>
 #include <KPluginFactory>
 
-K_PLUGIN_CLASS_WITH_JSON(ContextMenuAction, "contextmenuaction.json")
+K_PLUGIN_CLASS_WITH_JSON(OneDriveContextMenuAction, "contextmenuaction.json")
 
-ContextMenuAction::ContextMenuAction(QObject *parent, const QVariantList &)
+OneDriveContextMenuAction::OneDriveContextMenuAction(QObject *parent, const QVariantList &)
     : KAbstractFileItemActionPlugin(parent)
 {
 }
 
-QList<QAction *> ContextMenuAction::actions(const KFileItemListProperties &fileItemInfos, QWidget *parentWidget)
+QList<QAction *> OneDriveContextMenuAction::actions(const KFileItemListProperties &fileItemInfos, QWidget *parentWidget)
 {
     // Ignore if more than one file is selected
     if (fileItemInfos.items().size() != 1) {
@@ -46,18 +46,18 @@ QList<QAction *> ContextMenuAction::actions(const KFileItemListProperties &fileI
         return {};
     }
 
-    QMenu *gdriveMenu = new QMenu(parentWidget);
-    gdriveMenu->addAction(createOpenUrlAction(parentWidget, gdriveLink));
-    gdriveMenu->addAction(createCopyUrlAction(parentWidget, gdriveLink));
+    QMenu *menu = new QMenu(parentWidget);
+    menu->addAction(createOpenUrlAction(parentWidget, gdriveLink));
+    menu->addAction(createCopyUrlAction(parentWidget, gdriveLink));
 
-    QAction *gdriveMenuAction = new QAction(i18n("Microsoft OneDrive"), parentWidget);
-    gdriveMenuAction->setMenu(gdriveMenu);
-    gdriveMenuAction->setIcon(QIcon::fromTheme(QStringLiteral("im-msn")));
+    QAction *menuAction = new QAction(i18n("Microsoft OneDrive"), parentWidget);
+    menuAction->setMenu(menu);
+    menuAction->setIcon(QIcon::fromTheme(QStringLiteral("im-msn")));
 
-    return {gdriveMenuAction};
+    return {menuAction};
 }
 
-QAction *ContextMenuAction::createCopyUrlAction(QWidget *parent, const QString &gdriveLink)
+QAction *OneDriveContextMenuAction::createCopyUrlAction(QWidget *parent, const QString &gdriveLink)
 {
     const QString name = i18n("Copy URL to clipboard");
     const QIcon icon = QIcon::fromTheme(QStringLiteral("edit-copy"));
@@ -70,7 +70,7 @@ QAction *ContextMenuAction::createCopyUrlAction(QWidget *parent, const QString &
     return action;
 }
 
-QAction *ContextMenuAction::createOpenUrlAction(QWidget *parent, const QString &gdriveLink)
+QAction *OneDriveContextMenuAction::createOpenUrlAction(QWidget *parent, const QString &gdriveLink)
 {
     const QString name = i18n("Open in browser");
     const QIcon icon = QIcon::fromTheme(QStringLiteral("internet-services"));

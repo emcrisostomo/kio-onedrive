@@ -4,24 +4,24 @@
  * SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
  */
 
-#ifndef GDRIVEPROPERTIESPLUGIN_H
-#define GDRIVEPROPERTIESPLUGIN_H
+#ifndef ONEDRIVEPROPERTIESPLUGIN_H
+#define ONEDRIVEPROPERTIESPLUGIN_H
 
 #include <KPropertiesDialog>
 #include <KPropertiesDialogPlugin>
 
 #include "ui_onedrivepropertiesplugin.h"
 
-class GDrivePropertiesPlugin : public KPropertiesDialogPlugin
+class OneDrivePropertiesPlugin : public KPropertiesDialogPlugin
 {
     Q_OBJECT
 public:
-    explicit GDrivePropertiesPlugin(QObject *parent, const QList<QVariant> &args);
-    ~GDrivePropertiesPlugin() override = default;
+    explicit OneDrivePropertiesPlugin(QObject *parent, const QList<QVariant> &args);
+    ~OneDrivePropertiesPlugin() override = default;
 
 private:
     QWidget m_widget;
-    Ui::GDrivePropertiesWidget m_ui;
+    Ui::OneDrivePropertiesWidget m_ui;
     KFileItem m_item;
 
     void showEntryDetails(const KIO::UDSEntry &entry);
@@ -30,4 +30,4 @@ private Q_SLOTS:
     void statJobFinished(KJob *job);
 };
 
-#endif // GDRIVEPROPERTIESPLUGIN_H
+#endif // ONEDRIVEPROPERTIESPLUGIN_H

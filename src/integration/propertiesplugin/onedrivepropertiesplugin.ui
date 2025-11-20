@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>GDrivePropertiesWidget</class>
- <widget class="QWidget" name="GDrivePropertiesWidget">
+ <class>OneDrivePropertiesWidget</class>
+ <widget class="QWidget" name="OneDrivePropertiesWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -296,7 +296,7 @@
         </sizepolicy>
        </property>
        <property name="toolTip">
-        <string>Click to copy the Google Drive URL to the clipboard.</string>
+        <string>Click to copy the Microsoft OneDrive URL to the clipboard.</string>
        </property>
        <property name="text">
         <string>Copy URL to Clipboard</string>

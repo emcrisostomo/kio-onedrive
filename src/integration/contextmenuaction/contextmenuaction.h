@@ -11,12 +11,12 @@
 #include <KAbstractFileItemActionPlugin>
 #include <KFileItem>
 
-class ContextMenuAction : public KAbstractFileItemActionPlugin
+class OneDriveContextMenuAction : public KAbstractFileItemActionPlugin
 {
     Q_OBJECT
 
 public:
-    ContextMenuAction(QObject *parent, const QVariantList &args);
+    OneDriveContextMenuAction(QObject *parent, const QVariantList &args);
     QList<QAction *> actions(const KFileItemListProperties &fileItemInfos, QWidget *parentWidget) override;
 
 private:
