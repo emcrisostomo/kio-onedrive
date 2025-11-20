@@ -7,9 +7,9 @@
  */
 
 #include "kio_gdrive.h"
-#include "gdrive_udsentry.h"
 #include "gdrivebackend.h"
 #include "gdriveurl.h"
+#include "onedrive_udsentry.h"
 #include "onedrivedebug.h"
 #include "onedriveversion.h"
 
@@ -216,7 +216,7 @@ KIO::WorkerResult KIOGDrive::listSharedDrivesRoot(const QUrl &url)
         entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
         entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("folder-cloud"));
         entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
-        entry.fastInsert(GDriveUDSEntryExtras::Id, drive.id);
+        entry.fastInsert(OneDriveUDSEntryExtras::Id, drive.id);
         listEntry(entry);
         m_cache.insertPath(QStringLiteral("/%1/%2/%3").arg(accountId, GDriveUrl::SharedDrivesDir, drive.name), drive.id);
     }

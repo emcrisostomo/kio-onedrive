@@ -5,7 +5,7 @@
  */
 
 #include "onedrivepropertiesplugin.h"
-#include "../../gdrive_udsentry.h"
+#include "../../onedrive_udsentry.h"
 #include "../../onedrivedebug.h"
 
 #include <KIO/StatJob>
@@ -47,7 +47,7 @@ GDrivePropertiesPlugin::GDrivePropertiesPlugin(QObject *parent, const QList<QVar
 
 void GDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
 {
-    const QString id = entry.stringValue(GDriveUDSEntryExtras::Id);
+    const QString id = entry.stringValue(OneDriveUDSEntryExtras::Id);
     m_ui.idValue->setText(id);
 
     const QString created = m_item.timeString(KFileItem::CreationTime);
@@ -59,8 +59,8 @@ void GDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
     const QString lastViewedByMe = m_item.timeString(KFileItem::AccessTime);
     m_ui.lastViewedByMeValue->setText(lastViewedByMe);
 
-    if (entry.contains(GDriveUDSEntryExtras::SharedWithMeDate)) {
-        m_ui.sharedWithMeValue->setText(entry.stringValue(GDriveUDSEntryExtras::SharedWithMeDate));
+    if (entry.contains(OneDriveUDSEntryExtras::SharedWithMeDate)) {
+        m_ui.sharedWithMeValue->setText(entry.stringValue(OneDriveUDSEntryExtras::SharedWithMeDate));
         m_ui.sharedWithMeLabel->show();
         m_ui.sharedWithMeValue->show();
     } else {
@@ -68,22 +68,22 @@ void GDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
         m_ui.sharedWithMeValue->hide();
     }
 
-    const QString version = entry.stringValue(GDriveUDSEntryExtras::Version);
+    const QString version = entry.stringValue(OneDriveUDSEntryExtras::Version);
     m_ui.versionValue->setText(version);
 
-    const QString md5 = entry.stringValue(GDriveUDSEntryExtras::Md5);
+    const QString md5 = entry.stringValue(OneDriveUDSEntryExtras::Md5);
     m_ui.md5Value->setText(md5);
 
-    const QString lastModifyingUserName = entry.stringValue(GDriveUDSEntryExtras::LastModifyingUser);
+    const QString lastModifyingUserName = entry.stringValue(OneDriveUDSEntryExtras::LastModifyingUser);
     m_ui.lastModifiedByValue->setText(lastModifyingUserName);
 
-    const QString owners = entry.stringValue(GDriveUDSEntryExtras::Owners);
+    const QString owners = entry.stringValue(OneDriveUDSEntryExtras::Owners);
     m_ui.ownersValue->setText(owners);
 
     const QString description = entry.stringValue(KIO::UDSEntry::UDS_COMMENT);
     m_ui.descriptionValue->setText(description);
 
-    const QString gdriveLink = entry.stringValue(GDriveUDSEntryExtras::Url);
+    const QString gdriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
     connect(m_ui.urlOpenButton, &QPushButton::clicked, this, [gdriveLink]() {
         QDesktopServices::openUrl(QUrl(gdriveLink));
     });

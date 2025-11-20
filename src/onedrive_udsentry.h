@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: GPL-2.0-only OR GPL-3.0-only OR LicenseRef-KDE-Accepted-GPL
  */
 
-#ifndef GDRIVEUDSENTRY_H
-#define GDRIVEUDSENTRY_H
+#ifndef ONEDRIVEUDSENTRY_H
+#define ONEDRIVEUDSENTRY_H
 
 #include <KIO/UDSEntry>
 
-enum GDriveUDSEntryExtras {
+enum OneDriveUDSEntryExtras {
     Url = KIO::UDSEntry::UDS_EXTRA,
     Id,
     Md5,
@@ -20,4 +20,4 @@ enum GDriveUDSEntryExtras {
     SharedWithMeDate,
 };
 
-#endif // GDRIVEUDSENTRY_H
+#endif // ONEDRIVEUDSENTRY_H

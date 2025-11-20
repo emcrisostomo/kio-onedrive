@@ -6,7 +6,7 @@
  */
 
 #include "contextmenuaction.h"
-#include "../../gdrive_udsentry.h"
+#include "../../onedrive_udsentry.h"
 
 #include <QAction>
 #include <QClipboard>
@@ -40,7 +40,7 @@ QList<QAction *> ContextMenuAction::actions(const KFileItemListProperties &fileI
     }
 
     const KIO::UDSEntry entry = item.entry();
-    const QString gdriveLink = entry.stringValue(GDriveUDSEntryExtras::Url);
+    const QString gdriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
     // Ignore if missing a shareable link
     if (gdriveLink.isEmpty()) {
         return {};
