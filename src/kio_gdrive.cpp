@@ -8,7 +8,6 @@
 #include "kio_gdrive.h"
 #include "gdrive_udsentry.h"
 #include "gdrivebackend.h"
-#include "gdrivehelper.h"
 #include "gdriveurl.h"
 #include "onedrivedebug.h"
 #include "onedriveversion.h"
@@ -22,21 +21,8 @@
 #include <QUrlQuery>
 #include <QUuid>
 
-#include <KGAPI/AuthJob>
-#include <KGAPI/Drive/Drives>
-#include <KGAPI/Drive/DrivesCreateJob>
-#include <KGAPI/Drive/DrivesDeleteJob>
-#include <KGAPI/Drive/DrivesFetchJob>
-#include <KGAPI/Drive/DrivesModifyJob>
-#include <KGAPI/Drive/File>
-#include <KGAPI/Drive/FileCreateJob>
-#include <KGAPI/Drive/ParentReference>
-#include <KGAPI/Drive/Permission>
 #include <KIO/Job>
 #include <KLocalizedString>
-
-using namespace KGAPI2;
-using namespace Drive;
 
 class KIOPluginForMetaData : public QObject
 {
@@ -76,40 +62,6 @@ KIOGDrive::~KIOGDrive()
     closeConnection();
 }
 
-KIOGDrive::Result KIOGDrive::handleError(const KGAPI2::Job &job, const QUrl &url)
-{
-    qCDebug(ONEDRIVE) << "Completed job" << (&job) << "error code:" << job.error() << "- message:" << job.errorString();
-
-    switch (job.error()) {
-    case KGAPI2::OK:
-    case KGAPI2::NoError:
-        return Result::success();
-    case KGAPI2::AuthCancelled:
-    case KGAPI2::AuthError:
-        return Result::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-    case KGAPI2::Unauthorized: {
-        const AccountPtr oldAccount = job.account();
-        const AccountPtr account = m_accountManager->refreshAccount(oldAccount);
-        if (!account) {
-            return Result::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-        }
-        return Result::restart();
-    }
-    case KGAPI2::Forbidden:
-        return Result::fail(KIO::ERR_ACCESS_DENIED, url.toDisplayString());
-    case KGAPI2::NotFound:
-        return Result::fail(KIO::ERR_DOES_NOT_EXIST, url.toDisplayString());
-    case KGAPI2::NoContent:
-        return Result::fail(KIO::ERR_NO_CONTENT, url.toDisplayString());
-    case KGAPI2::QuotaExceeded:
-        return Result::fail(KIO::ERR_DISK_FULL, url.toDisplayString());
-    default:
-        return Result::fail(KIO::ERR_WORKER_DEFINED, job.errorString());
-    }
-
-    return Result::fail(KIO::ERR_WORKER_DEFINED, i18n("Unknown error"));
-}
-
 KIO::WorkerResult KIOGDrive::fileSystemFreeSpace(const QUrl &url)
 {
     const auto gdriveUrl = GDriveUrl(url);
@@ -147,78 +99,9 @@ KIO::WorkerResult KIOGDrive::fileSystemFreeSpace(const QUrl &url)
     return KIO::WorkerResult::pass();
 }
 
-AccountPtr KIOGDrive::getAccount(const QString &accountName)
+KGAPI2::AccountPtr KIOGDrive::getAccount(const QString &accountName)
 {
     return m_accountManager->account(accountName);
-}
-
-KIO::UDSEntry KIOGDrive::fileToUDSEntry(const FilePtr &origFile, const QString &path) const
-{
-    KIO::UDSEntry entry;
-    bool isFolder = false;
-
-    FilePtr file = origFile;
-    if (GDriveHelper::isGDocsDocument(file)) {
-        GDriveHelper::convertFromGDocs(file);
-    }
-
-    entry.fastInsert(KIO::UDSEntry::UDS_NAME, file->title());
-    entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, file->title());
-    entry.fastInsert(KIO::UDSEntry::UDS_COMMENT, file->description());
-
-    if (file->isFolder()) {
-        entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
-        entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
-        isFolder = true;
-    } else {
-        entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFREG);
-        entry.fastInsert(KIO::UDSEntry::UDS_MIME_TYPE, file->mimeType());
-        entry.fastInsert(KIO::UDSEntry::UDS_SIZE, file->fileSize());
-
-        entry.fastInsert(KIO::UDSEntry::UDS_URL, fileToUrl(origFile, path).toString());
-    }
-
-    entry.fastInsert(KIO::UDSEntry::UDS_CREATION_TIME, file->createdDate().toSecsSinceEpoch());
-    entry.fastInsert(KIO::UDSEntry::UDS_MODIFICATION_TIME, file->modifiedDate().toSecsSinceEpoch());
-    entry.fastInsert(KIO::UDSEntry::UDS_ACCESS_TIME, file->lastViewedByMeDate().toSecsSinceEpoch());
-    if (!file->ownerNames().isEmpty()) {
-        entry.fastInsert(KIO::UDSEntry::UDS_USER, file->ownerNames().first());
-    }
-
-    if (!isFolder) {
-        if (file->editable()) {
-            entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
-        } else {
-            entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IRGRP | S_IROTH);
-        }
-    } else {
-        entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IXOTH);
-    }
-
-    entry.fastInsert(GDriveUDSEntryExtras::Id, file->id());
-    entry.fastInsert(GDriveUDSEntryExtras::Url, file->alternateLink().toString());
-    entry.fastInsert(GDriveUDSEntryExtras::Version, QString::number(file->version()));
-    entry.fastInsert(GDriveUDSEntryExtras::Md5, file->md5Checksum());
-    entry.fastInsert(GDriveUDSEntryExtras::LastModifyingUser, file->lastModifyingUserName());
-    entry.fastInsert(GDriveUDSEntryExtras::Owners, file->ownerNames().join(QStringLiteral(", ")));
-    if (file->sharedWithMeDate().isValid()) {
-        entry.fastInsert(GDriveUDSEntryExtras::SharedWithMeDate, QLocale::system().toString(file->sharedWithMeDate(), QLocale::LongFormat));
-    }
-
-    return entry;
-}
-
-QUrl KIOGDrive::fileToUrl(const FilePtr &file, const QString &path) const
-{
-    QUrl url;
-    url.setScheme(GDriveUrl::Scheme);
-    url.setPath(path + QLatin1Char('/') + file->title());
-
-    QUrlQuery urlQuery;
-    urlQuery.addQueryItem(QStringLiteral("id"), file->id());
-    url.setQuery(urlQuery);
-
-    return url;
 }
 
 KIO::WorkerResult KIOGDrive::openConnection()
@@ -262,27 +145,6 @@ KIO::UDSEntry KIOGDrive::accountToUDSEntry(const QString &accountNAme)
     entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
     entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
     entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("onedrive"));
-
-    return entry;
-}
-
-KIO::UDSEntry KIOGDrive::sharedDriveToUDSEntry(const DrivesPtr &sharedDrive)
-{
-    KIO::UDSEntry entry;
-
-    qlonglong udsAccess = S_IRUSR | S_IXUSR | S_IRGRP;
-    if (sharedDrive->capabilities()->canRenameDrive() || sharedDrive->capabilities()->canDeleteDrive()) {
-        udsAccess |= S_IWUSR;
-    }
-
-    entry.fastInsert(KIO::UDSEntry::UDS_NAME, sharedDrive->id());
-    entry.fastInsert(KIO::UDSEntry::UDS_DISPLAY_NAME, sharedDrive->name());
-    entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, S_IFDIR);
-    entry.fastInsert(KIO::UDSEntry::UDS_SIZE, 0);
-    entry.fastInsert(KIO::UDSEntry::UDS_CREATION_TIME, sharedDrive->createdDate().toSecsSinceEpoch());
-    entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, udsAccess);
-    entry.fastInsert(KIO::UDSEntry::UDS_HIDDEN, sharedDrive->hidden());
     entry.fastInsert(KIO::UDSEntry::UDS_ICON_NAME, QStringLiteral("onedrive"));
 
     return entry;
@@ -1251,32 +1113,6 @@ KIO::WorkerResult KIOGDrive::readPutData(QTemporaryFile &tempFile, const QString
         qCWarning(ONEDRIVE) << "Could not read source file" << tempFile.fileName();
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, QString());
     }
-
-    return KIO::WorkerResult::pass();
-}
-
-KIO::WorkerResult KIOGDrive::runJob(KGAPI2::Job &job, const QUrl &url, const QString &accountId)
-{
-    auto account = getAccount(accountId);
-    if (account->accessToken().isEmpty()) {
-        qCWarning(ONEDRIVE) << "Expired or missing access/refresh token for account" << accountId;
-        return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("Expired or missing access tokens for account %1", accountId));
-    }
-
-    Q_FOREVER {
-        qCDebug(ONEDRIVE) << "Running job" << (&job) << "with accessToken" << GDriveHelper::elideToken(job.account()->accessToken());
-        QEventLoop eventLoop;
-        QObject::connect(&job, &KGAPI2::Job::finished, &eventLoop, &QEventLoop::quit);
-        eventLoop.exec();
-        Result result = handleError(job, url);
-        if (result.action == KIOGDrive::Success) {
-            break;
-        } else if (result.action == KIOGDrive::Fail) {
-            return KIO::WorkerResult::fail(result.error, result.errorString);
-        }
-        job.setAccount(account);
-        job.restart();
-    };
 
     return KIO::WorkerResult::pass();
 }

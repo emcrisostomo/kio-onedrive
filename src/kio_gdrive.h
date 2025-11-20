@@ -13,7 +13,6 @@
 #include "pathcache.h"
 
 #include <KGAPI/Account>
-#include <KGAPI/Types>
 #include <KIO/WorkerBase>
 
 #include <memory>
@@ -21,11 +20,6 @@
 class AbstractAccountManager;
 
 class QTemporaryFile;
-
-namespace KGAPI2
-{
-class Job;
-}
 
 class KIOGDrive : public KIO::WorkerBase
 {
@@ -71,7 +65,6 @@ private:
     static KIO::UDSEntry newAccountUDSEntry();
     static KIO::UDSEntry sharedWithMeUDSEntry();
     static KIO::UDSEntry accountToUDSEntry(const QString &accountName);
-    static KIO::UDSEntry sharedDriveToUDSEntry(const KGAPI2::Drive::DrivesPtr &sharedDrive);
 
     [[nodiscard]] KIO::WorkerResult listAccounts();
     [[nodiscard]] KIO::WorkerResult createAccount();
@@ -86,55 +79,17 @@ private:
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
     QString resolveSharedDriveId(const QString &idOrName, const QString &accountId);
 
-    struct Result {
-        Action action;
-        int error = KJob::NoError;
-        QString errorString;
-
-        static Result fail(int error, QString errorString)
-        {
-            return {Fail, error, errorString};
-        }
-
-        static Result success()
-        {
-            return {Success, KJob::NoError, QString()};
-        }
-
-        static Result restart()
-        {
-            return {Restart, KJob::NoError, QString()};
-        }
-    };
-
-    [[nodiscard]] Result handleError(const KGAPI2::Job &job, const QUrl &url);
-    KIO::UDSEntry fileToUDSEntry(const KGAPI2::Drive::FilePtr &file, const QString &path) const;
-    QUrl fileToUrl(const KGAPI2::Drive::FilePtr &file, const QString &path) const;
-
     KGAPI2::AccountPtr getAccount(const QString &accountName);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
     [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
     [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath);
-    [[nodiscard]] KIO::WorkerResult listFolderByDriveId(const QUrl &url,
-                                                        const QString &accountId,
-                                                        const KGAPI2::AccountPtr &account,
-                                                        const QString &driveId,
-                                                        const QString &itemId = QString());
     [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
     void cacheSharedWithMeEntries(const QString &accountId, const QList<OneDrive::DriveItem> &items);
 
     [[nodiscard]] KIO::WorkerResult putUpdate(const QUrl &url);
     [[nodiscard]] KIO::WorkerResult putCreate(const QUrl &url);
     [[nodiscard]] KIO::WorkerResult readPutData(QTemporaryFile &tmpFile, const QString &fileName, QString *detectedMimeType = nullptr);
-
-    /**
-     * Executes a KGAPI2::Job in an event loop, retrying the job until success or failure.
-     * If the Job fails a WorkerResult with an appropriate error message will be returned.
-     *
-     * @return Whether @p job succeeded.
-     */
-    [[nodiscard]] KIO::WorkerResult runJob(KGAPI2::Job &job, const QUrl &url, const QString &accountId);
 
     std::unique_ptr<AbstractAccountManager> m_accountManager;
     PathCache m_cache;
