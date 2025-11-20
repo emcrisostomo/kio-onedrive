@@ -28,6 +28,6 @@ public:
     }
 };
 
-K_PLUGIN_CLASS_WITH_JSON(OneDrivePlugin, "purpose_gdrive.json")
+K_PLUGIN_CLASS_WITH_JSON(OneDrivePlugin, "purpose_onedrive.json")
 
-#include "purpose_gdrive.moc"
+#include "purpose_onedrive.moc"
