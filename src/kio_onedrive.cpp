@@ -65,18 +65,18 @@ KIOOneDrive::~KIOOneDrive()
 
 KIO::WorkerResult KIOOneDrive::fileSystemFreeSpace(const QUrl &url)
 {
-    const auto gdriveUrl = OneDriveUrl(url);
-    if (gdriveUrl.isNewAccountPath()) {
+    const auto oneDriveUrl = OneDriveUrl(url);
+    if (oneDriveUrl.isNewAccountPath()) {
         qCDebug(ONEDRIVE) << "fileSystemFreeSpace is not supported for new-account url";
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isRoot()) {
+    if (oneDriveUrl.isRoot()) {
         qCDebug(ONEDRIVE) << "fileSystemFreeSpace is not supported for onedrive root url";
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_STAT, url.toDisplayString());
     }
 
     qCDebug(ONEDRIVE) << "Getting fileSystemFreeSpace for" << url;
-    const QString accountId = gdriveUrl.account();
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
@@ -197,8 +197,8 @@ KIO::WorkerResult KIOOneDrive::listAccounts()
 
 KIO::WorkerResult KIOOneDrive::listSharedDrivesRoot(const QUrl &url)
 {
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
     const auto drivesResult = m_graphClient.listSharedDrives(account->accessToken());
     if (!drivesResult.success) {
@@ -241,8 +241,8 @@ KIO::WorkerResult KIOOneDrive::deleteSharedDrive(const QUrl &url)
 
 KIO::WorkerResult KIOOneDrive::statSharedDrive(const QUrl &url)
 {
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
 
     QString sharedDriveId = m_cache.idForPath(url.path());
@@ -257,7 +257,7 @@ KIO::WorkerResult KIOOneDrive::statSharedDrive(const QUrl &url)
         for (const auto &drive : drivesResult.drives) {
             const QString pathKey = QStringLiteral("%1/%2/%3").arg(accountId, OneDriveUrl::SharedDrivesDir, drive.name);
             m_cache.insertPath(pathKey, drive.id);
-            if (drive.name == gdriveUrl.filename()) {
+            if (drive.name == oneDriveUrl.filename()) {
                 sharedDriveId = drive.id;
             }
         }
@@ -339,8 +339,8 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveSharedWithMeKey(const 
         return {KIO::WorkerResult::pass(), remoteKey};
     }
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QStringList components = gdriveUrl.pathComponents();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QStringList components = oneDriveUrl.pathComponents();
     if (components.size() < 3) {
         return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
     }
@@ -409,23 +409,23 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveFileIdFromPath(const Q
     QUrl url;
     url.setScheme(OneDriveUrl::Scheme);
     url.setPath(path);
-    const auto gdriveUrl = OneDriveUrl(url);
-    Q_ASSERT(!gdriveUrl.isRoot());
+    const auto oneDriveUrl = OneDriveUrl(url);
+    Q_ASSERT(!oneDriveUrl.isRoot());
 
-    if (gdriveUrl.isAccountRoot() || gdriveUrl.isTrashDir() || gdriveUrl.isSharedWithMeRoot()) {
+    if (oneDriveUrl.isAccountRoot() || oneDriveUrl.isTrashDir() || oneDriveUrl.isSharedWithMeRoot()) {
         qCDebug(ONEDRIVE) << "Resolved" << path << "to account root";
-        return rootFolderId(gdriveUrl.account());
+        return rootFolderId(oneDriveUrl.account());
     }
 
-    if (gdriveUrl.isSharedDrive()) {
-        // The gdriveUrl.filename() could be the Shared Drive id or
+    if (oneDriveUrl.isSharedDrive()) {
+        // The oneDriveUrl.filename() could be the Shared Drive id or
         // the name depending on whether we are navigating from a parent
         // or accessing the url directly, use the shared drive specific
         // solver to disambiguate
-        return {KIO::WorkerResult::pass(), resolveSharedDriveId(gdriveUrl.filename(), gdriveUrl.account())};
+        return {KIO::WorkerResult::pass(), resolveSharedDriveId(oneDriveUrl.filename(), oneDriveUrl.account())};
     }
 
-    if (gdriveUrl.isSharedDrivesRoot()) {
+    if (oneDriveUrl.isSharedDrivesRoot()) {
         qCDebug(ONEDRIVE) << "Resolved" << path << "to Shared Drives root";
         return {KIO::WorkerResult::pass(), QString()};
     }
@@ -434,14 +434,14 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveFileIdFromPath(const Q
         return !url.isSharedWithMeRoot() && !url.isSharedWithMe() && !url.isSharedDrivesRoot() && !url.isSharedDrive() && !url.isTrashDir() && !url.isTrashed();
     };
 
-    if (isPersonalPath(gdriveUrl)) {
-        const QString accountId = gdriveUrl.account();
+    if (isPersonalPath(oneDriveUrl)) {
+        const QString accountId = oneDriveUrl.account();
         const auto account = getAccount(accountId);
         if (account->accountName().isEmpty()) {
             return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId)), QString()};
         }
 
-        const QStringList components = gdriveUrl.pathComponents();
+        const QStringList components = oneDriveUrl.pathComponents();
         if (components.size() < 2) {
             return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, path), QString()};
         }
@@ -618,34 +618,34 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << "Going to list" << url;
 
-    const auto gdriveUrl = OneDriveUrl(url);
+    const auto oneDriveUrl = OneDriveUrl(url);
 
-    if (gdriveUrl.isRoot()) {
+    if (oneDriveUrl.isRoot()) {
         return listAccounts();
     }
-    if (gdriveUrl.isNewAccountPath()) {
+    if (oneDriveUrl.isNewAccountPath()) {
         return createAccount();
     }
 
     // We are committed to listing an url that belongs to
     // an account (i.e. not root or new account path), lets
     // make sure we know about the account
-    const QString accountId = gdriveUrl.account();
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
         qCDebug(ONEDRIVE) << "Unknown account" << accountId << "for" << url;
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
-    if (gdriveUrl.isAccountRoot()) {
+    if (oneDriveUrl.isAccountRoot()) {
         return listAccountRoot(url, accountId, account);
     }
 
-    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
-    if (gdriveUrl.isSharedWithMeRoot()) {
+    if (oneDriveUrl.isSharedWithMeRoot()) {
         const auto sharedItems = m_graphClient.listSharedWithMe(account->accessToken());
         if (!sharedItems.success) {
             qCWarning(ONEDRIVE) << "Graph sharedWithMe failed for" << accountId << sharedItems.httpStatus << sharedItems.errorMessage;
@@ -670,7 +670,7 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
         listEntry(dotEntry);
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
         if (!keyResult.success()) {
             return keyResult;
@@ -708,14 +708,14 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
-        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
-        const auto components = gdriveUrl.pathComponents();
+    if (!oneDriveUrl.isSharedWithMe() && !oneDriveUrl.isSharedWithMeRoot() && !oneDriveUrl.isSharedDrivesRoot() && !oneDriveUrl.isSharedDrive()
+        && !oneDriveUrl.isTrashDir() && !oneDriveUrl.isTrashed()) {
+        const auto components = oneDriveUrl.pathComponents();
         const QString relativePath = components.mid(1).join(QStringLiteral("/"));
         return listFolderByPath(url, accountId, account, relativePath);
     }
 
-    return listFolderByPath(url, accountId, account, gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/")));
+    return listFolderByPath(url, accountId, account, oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/")));
 }
 
 KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
@@ -727,14 +727,14 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
 
     qCDebug(ONEDRIVE) << "Creating directory" << url;
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QString accountId = oneDriveUrl.account();
     // At least account and new folder name
-    if (gdriveUrl.isRoot() || gdriveUrl.isAccountRoot()) {
+    if (oneDriveUrl.isRoot() || oneDriveUrl.isAccountRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    if (gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
     auto isPersonalPath = [](const OneDriveUrl &path) {
@@ -742,7 +742,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
             && !path.isTrashed();
     };
 
-    if (!isPersonalPath(gdriveUrl)) {
+    if (!isPersonalPath(oneDriveUrl)) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
@@ -751,12 +751,12 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
-    const QStringList components = gdriveUrl.pathComponents();
+    const QStringList components = oneDriveUrl.pathComponents();
     if (components.size() < 2) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    const QString folderName = gdriveUrl.filename();
+    const QString folderName = oneDriveUrl.filename();
     if (folderName.isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
@@ -775,13 +775,13 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
         }
         if (parentItem.httpStatus == 404) {
-            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, oneDriveUrl.parentPath());
         }
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, parentItem.errorMessage);
     }
 
     if (!parentItem.item.isFolder) {
-        return KIO::WorkerResult::fail(KIO::ERR_IS_FILE, gdriveUrl.parentPath());
+        return KIO::WorkerResult::fail(KIO::ERR_IS_FILE, oneDriveUrl.parentPath());
     }
 
     const auto createResult = m_graphClient.createFolder(account->accessToken(), parentItem.item.driveId, parentItem.item.id, folderName);
@@ -790,7 +790,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
         }
         if (createResult.httpStatus == 404) {
-            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, oneDriveUrl.parentPath());
         }
         if (createResult.httpStatus == 409) {
             return KIO::WorkerResult::fail(KIO::ERR_FILE_ALREADY_EXIST, url.path());
@@ -813,31 +813,31 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
     // KIO::StatDetails details = statDetails.isEmpty() ? KIO::StatDefaultDetails : static_cast<KIO::StatDetails>(statDetails.toInt());
     // qCDebug(ONEDRIVE) << "Going to stat()" << url << "for details" << details;
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    if (gdriveUrl.isRoot()) {
+    const auto oneDriveUrl = OneDriveUrl(url);
+    if (oneDriveUrl.isRoot()) {
         // TODO Can we stat() root?
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isNewAccountPath()) {
+    if (oneDriveUrl.isNewAccountPath()) {
         qCDebug(ONEDRIVE) << "stat()ing new-account path";
         const KIO::UDSEntry entry = newAccountUDSEntry();
         statEntry(entry);
         return KIO::WorkerResult::pass();
     }
 
-    const QString accountId = gdriveUrl.account();
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
 
-    if (gdriveUrl.isSharedWithMeRoot()) {
+    if (oneDriveUrl.isSharedWithMeRoot()) {
         qCDebug(ONEDRIVE) << "stat()ing Shared With Me path";
         const KIO::UDSEntry entry = sharedWithMeUDSEntry();
         statEntry(entry);
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
         if (!keyResult.success()) {
             return keyResult;
@@ -872,26 +872,26 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
-    if (gdriveUrl.isAccountRoot()) {
+    if (oneDriveUrl.isAccountRoot()) {
         qCDebug(ONEDRIVE) << "stat()ing account root";
         const KIO::UDSEntry entry = accountToUDSEntry(accountId);
         statEntry(entry);
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isSharedDrivesRoot()) {
+    if (oneDriveUrl.isSharedDrivesRoot()) {
         qCDebug(ONEDRIVE) << "stat()ing Shared Drives root";
         const auto entry = fetchSharedDrivesRootEntry(accountId);
         statEntry(entry);
         return KIO::WorkerResult::pass();
     }
-    if (gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrive()) {
         qCDebug(ONEDRIVE) << "stat()ing Shared Drive" << url;
         return statSharedDrive(url);
     }
 
-    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
-        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
-        const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    if (!oneDriveUrl.isSharedWithMe() && !oneDriveUrl.isSharedWithMeRoot() && !oneDriveUrl.isSharedDrivesRoot() && !oneDriveUrl.isSharedDrive()
+        && !oneDriveUrl.isTrashDir() && !oneDriveUrl.isTrashed()) {
+        const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
         const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
         if (!graphItem.success) {
             qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
@@ -910,7 +910,7 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
         if (!keyResult.success()) {
             return keyResult;
@@ -943,23 +943,23 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << "Fetching content of" << url;
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
 
-    if (gdriveUrl.isRoot()) {
+    if (oneDriveUrl.isRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
-    if (gdriveUrl.isAccountRoot()) {
+    if (oneDriveUrl.isAccountRoot()) {
         // You cannot GET an account folder!
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
     }
 
-    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
         if (!keyResult.success()) {
             return keyResult;
@@ -1025,9 +1025,9 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    if (!gdriveUrl.isSharedWithMe() && !gdriveUrl.isSharedWithMeRoot() && !gdriveUrl.isSharedDrivesRoot() && !gdriveUrl.isSharedDrive()
-        && !gdriveUrl.isTrashDir() && !gdriveUrl.isTrashed()) {
-        const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    if (!oneDriveUrl.isSharedWithMe() && !oneDriveUrl.isSharedWithMeRoot() && !oneDriveUrl.isSharedDrivesRoot() && !oneDriveUrl.isSharedDrive()
+        && !oneDriveUrl.isTrashDir() && !oneDriveUrl.isTrashed()) {
+        const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
         const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
         if (!graphItem.success) {
             qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
@@ -1139,8 +1139,8 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
     const QString fileId = QUrlQuery(url).queryItemValue(QStringLiteral("id"));
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url << fileId;
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    const auto accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const auto accountId = oneDriveUrl.account();
 
     if (fileId.isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
@@ -1151,7 +1151,7 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
             && !path.isTrashed();
     };
 
-    if (!isPersonalPath(gdriveUrl)) {
+    if (!isPersonalPath(oneDriveUrl)) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
@@ -1162,7 +1162,7 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
 
     QTemporaryFile tmpFile;
     QString mimeType;
-    if (auto result = readPutData(tmpFile, gdriveUrl.filename(), &mimeType); !result.success()) {
+    if (auto result = readPutData(tmpFile, oneDriveUrl.filename(), &mimeType); !result.success()) {
         return result;
     }
     const auto uploadResult = m_graphClient.uploadItemById(account->accessToken(), QString(), fileId, &tmpFile, mimeType);
@@ -1189,8 +1189,8 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
 KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url;
-    const auto gdriveUrl = OneDriveUrl(url);
-    if (gdriveUrl.isRoot() || gdriveUrl.isAccountRoot()) {
+    const auto oneDriveUrl = OneDriveUrl(url);
+    if (oneDriveUrl.isRoot() || oneDriveUrl.isAccountRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_ACCESS_DENIED, url.path());
     }
 
@@ -1199,17 +1199,17 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
             && !path.isTrashed();
     };
 
-    if (!isPersonalPath(gdriveUrl)) {
+    if (!isPersonalPath(oneDriveUrl)) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
-    const auto accountId = gdriveUrl.account();
+    const auto accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
     if (account->accountName().isEmpty()) {
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, i18n("%1 isn't a known OneDrive account", accountId));
     }
 
-    const QStringList components = gdriveUrl.pathComponents();
+    const QStringList components = oneDriveUrl.pathComponents();
     if (components.size() < 2) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
@@ -1229,7 +1229,7 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
                 return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
             }
             if (parentResult.httpStatus == 404) {
-                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, gdriveUrl.parentPath());
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, oneDriveUrl.parentPath());
             }
             return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, parentResult.errorMessage);
         }
@@ -1237,7 +1237,7 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
 
     QTemporaryFile tmpFile;
     QString mimeType;
-    if (auto result = readPutData(tmpFile, gdriveUrl.filename(), &mimeType); !result.success()) {
+    if (auto result = readPutData(tmpFile, oneDriveUrl.filename(), &mimeType); !result.success()) {
         return result;
     }
     const auto uploadResult = m_graphClient.uploadItemByPath(account->accessToken(), relativePath, &tmpFile, mimeType);
@@ -1270,9 +1270,9 @@ KIO::WorkerResult KIOOneDrive::put(const QUrl &url, int permissions, KIO::JobFla
 
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url;
 
-    const auto gdriveUrl = OneDriveUrl(url);
+    const auto oneDriveUrl = OneDriveUrl(url);
 
-    if (gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrive()) {
         qCDebug(ONEDRIVE) << "Can't create files in Shared Drives root" << url;
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_WRITE, url.path());
     }
@@ -1282,7 +1282,7 @@ KIO::WorkerResult KIOOneDrive::put(const QUrl &url, int permissions, KIO::JobFla
             && !path.isTrashed();
     };
 
-    if (!isPersonalPath(gdriveUrl)) {
+    if (!isPersonalPath(oneDriveUrl)) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
     }
 
@@ -1429,23 +1429,23 @@ KIO::WorkerResult KIOOneDrive::copy(const QUrl &src, const QUrl &dest, int permi
 KIO::WorkerResult KIOOneDrive::del(const QUrl &url, bool isfile)
 {
     Q_UNUSED(isfile)
-    const auto gdriveUrl = OneDriveUrl(url);
+    const auto oneDriveUrl = OneDriveUrl(url);
 
-    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Deleting shared items is not supported yet."));
     }
 
-    if (gdriveUrl.isRoot()) {
+    if (oneDriveUrl.isRoot()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
 
-    const QString accountId = gdriveUrl.account();
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
 
-    if (gdriveUrl.isAccountRoot()) {
+    if (oneDriveUrl.isAccountRoot()) {
         if (account->accountName().isEmpty()) {
             return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, accountId);
         }
@@ -1453,7 +1453,7 @@ KIO::WorkerResult KIOOneDrive::del(const QUrl &url, bool isfile)
         return KIO::WorkerResult::pass();
     }
 
-    const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
     const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
     if (!graphItem.success) {
         if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
@@ -1615,14 +1615,14 @@ KIO::WorkerResult KIOOneDrive::mimetype(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << Q_FUNC_INFO << url;
 
-    const auto gdriveUrl = OneDriveUrl(url);
-    const QString accountId = gdriveUrl.account();
+    const auto oneDriveUrl = OneDriveUrl(url);
+    const QString accountId = oneDriveUrl.account();
     const auto account = getAccount(accountId);
 
-    if (gdriveUrl.isRoot() || gdriveUrl.isAccountRoot() || gdriveUrl.isNewAccountPath()) {
+    if (oneDriveUrl.isRoot() || oneDriveUrl.isAccountRoot() || oneDriveUrl.isNewAccountPath()) {
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
-    if (gdriveUrl.isSharedDrivesRoot() || gdriveUrl.isSharedDrive()) {
+    if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
     }
 
@@ -1634,7 +1634,7 @@ KIO::WorkerResult KIOOneDrive::mimetype(const QUrl &url)
         return false;
     };
 
-    if (gdriveUrl.isSharedWithMe()) {
+    if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
         if (!keyResult.success()) {
             return keyResult;
@@ -1666,7 +1666,7 @@ KIO::WorkerResult KIOOneDrive::mimetype(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    const QString relativePath = gdriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
     const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
     if (!graphItem.success) {
         qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;

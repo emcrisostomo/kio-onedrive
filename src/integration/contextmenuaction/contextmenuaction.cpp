@@ -40,15 +40,15 @@ QList<QAction *> OneDriveContextMenuAction::actions(const KFileItemListPropertie
     }
 
     const KIO::UDSEntry entry = item.entry();
-    const QString gdriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
+    const QString oneDriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
     // Ignore if missing a shareable link
-    if (gdriveLink.isEmpty()) {
+    if (oneDriveLink.isEmpty()) {
         return {};
     }
 
     QMenu *menu = new QMenu(parentWidget);
-    menu->addAction(createOpenUrlAction(parentWidget, gdriveLink));
-    menu->addAction(createCopyUrlAction(parentWidget, gdriveLink));
+    menu->addAction(createOpenUrlAction(parentWidget, oneDriveLink));
+    menu->addAction(createCopyUrlAction(parentWidget, oneDriveLink));
 
     QAction *menuAction = new QAction(i18n("Microsoft OneDrive"), parentWidget);
     menuAction->setMenu(menu);
@@ -57,27 +57,27 @@ QList<QAction *> OneDriveContextMenuAction::actions(const KFileItemListPropertie
     return {menuAction};
 }
 
-QAction *OneDriveContextMenuAction::createCopyUrlAction(QWidget *parent, const QString &gdriveLink)
+QAction *OneDriveContextMenuAction::createCopyUrlAction(QWidget *parent, const QString &onedriveLink)
 {
     const QString name = i18n("Copy URL to clipboard");
     const QIcon icon = QIcon::fromTheme(QStringLiteral("edit-copy"));
     QAction *action = new QAction(icon, name, parent);
 
-    connect(action, &QAction::triggered, this, [gdriveLink]() {
-        QGuiApplication::clipboard()->setText(gdriveLink);
+    connect(action, &QAction::triggered, this, [onedriveLink]() {
+        QGuiApplication::clipboard()->setText(onedriveLink);
     });
 
     return action;
 }
 
-QAction *OneDriveContextMenuAction::createOpenUrlAction(QWidget *parent, const QString &gdriveLink)
+QAction *OneDriveContextMenuAction::createOpenUrlAction(QWidget *parent, const QString &onedriveLink)
 {
     const QString name = i18n("Open in browser");
     const QIcon icon = QIcon::fromTheme(QStringLiteral("internet-services"));
     QAction *action = new QAction(icon, name, parent);
 
-    connect(action, &QAction::triggered, this, [gdriveLink]() {
-        QDesktopServices::openUrl(QUrl(gdriveLink));
+    connect(action, &QAction::triggered, this, [onedriveLink]() {
+        QDesktopServices::openUrl(QUrl(onedriveLink));
     });
 
     return action;

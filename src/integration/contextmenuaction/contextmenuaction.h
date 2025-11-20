@@ -20,8 +20,8 @@ public:
     QList<QAction *> actions(const KFileItemListProperties &fileItemInfos, QWidget *parentWidget) override;
 
 private:
-    QAction *createCopyUrlAction(QWidget *parent, const QString &gdriveLink);
-    QAction *createOpenUrlAction(QWidget *parent, const QString &gdriveLink);
+    QAction *createCopyUrlAction(QWidget *parent, const QString &onedriveLink);
+    QAction *createOpenUrlAction(QWidget *parent, const QString &onedriveLink);
 };
 
 #endif

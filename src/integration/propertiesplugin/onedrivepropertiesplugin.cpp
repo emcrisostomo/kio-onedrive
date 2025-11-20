@@ -83,13 +83,13 @@ void OneDrivePropertiesPlugin::showEntryDetails(const KIO::UDSEntry &entry)
     const QString description = entry.stringValue(KIO::UDSEntry::UDS_COMMENT);
     m_ui.descriptionValue->setText(description);
 
-    const QString gdriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
-    connect(m_ui.urlOpenButton, &QPushButton::clicked, this, [gdriveLink]() {
-        QDesktopServices::openUrl(QUrl(gdriveLink));
+    const QString oneDriveLink = entry.stringValue(OneDriveUDSEntryExtras::Url);
+    connect(m_ui.urlOpenButton, &QPushButton::clicked, this, [oneDriveLink]() {
+        QDesktopServices::openUrl(QUrl(oneDriveLink));
     });
 
-    connect(m_ui.urlCopyButton, &QPushButton::clicked, this, [gdriveLink]() {
-        QGuiApplication::clipboard()->setText(gdriveLink);
+    connect(m_ui.urlCopyButton, &QPushButton::clicked, this, [oneDriveLink]() {
+        QGuiApplication::clipboard()->setText(oneDriveLink);
     });
 }
 
