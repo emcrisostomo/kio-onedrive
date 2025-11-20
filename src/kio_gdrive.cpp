@@ -30,9 +30,6 @@
 #include <KGAPI/Drive/DrivesModifyJob>
 #include <KGAPI/Drive/File>
 #include <KGAPI/Drive/FileCreateJob>
-#include <KGAPI/Drive/FileFetchContentJob>
-#include <KGAPI/Drive/FileFetchJob>
-#include <KGAPI/Drive/FileSearchQuery>
 #include <KGAPI/Drive/ParentReference>
 #include <KGAPI/Drive/Permission>
 #include <KIO/Job>
@@ -609,54 +606,7 @@ std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveFileIdFromPath(const QSt
         return {KIO::WorkerResult::pass(), graphItem.item.id};
     }
 
-    QString parentId;
-    if (!gdriveUrl.isSharedWithMeTopLevel()) {
-        const auto [result, id] = resolveFileIdFromPath(gdriveUrl.parentPath(), KIOGDrive::PathIsFolder);
-
-        if (!result.success()) {
-            return {result, QString()};
-        }
-        parentId = id;
-
-        if (parentId.isEmpty()) {
-            return {KIO::WorkerResult::pass(), QString()};
-        }
-        qCDebug(ONEDRIVE) << "Getting ID for" << gdriveUrl.filename() << "in parent with ID" << parentId;
-    } else {
-        qCDebug(ONEDRIVE) << "Getting ID for" << gdriveUrl.filename() << "(top-level shared-with-me file without a parentId)";
-    }
-
-    FileSearchQuery query;
-    if (flags != KIOGDrive::None) {
-        query.addQuery(FileSearchQuery::MimeType,
-                       (flags & KIOGDrive::PathIsFolder ? FileSearchQuery::Equals : FileSearchQuery::NotEquals),
-                       GDriveHelper::folderMimeType());
-    }
-    query.addQuery(FileSearchQuery::Title, FileSearchQuery::Equals, gdriveUrl.filename());
-    if (!parentId.isEmpty()) {
-        query.addQuery(FileSearchQuery::Parents, FileSearchQuery::In, parentId);
-    }
-    query.addQuery(FileSearchQuery::Trashed, FileSearchQuery::Equals, gdriveUrl.isTrashed());
-
-    const QString accountId = gdriveUrl.account();
-    FileFetchJob fetchJob(query, getAccount(accountId));
-    fetchJob.setFields({File::Fields::Id, File::Fields::Title, File::Fields::Labels});
-    if (auto result = runJob(fetchJob, url, accountId); !result.success()) {
-        return {result, QString()};
-    }
-
-    const ObjectsList objects = fetchJob.items();
-    if (objects.isEmpty()) {
-        qCWarning(ONEDRIVE) << "Failed to resolve" << path;
-        return {KIO::WorkerResult::pass(), QString()};
-    }
-
-    const FilePtr file = objects[0].dynamicCast<File>();
-
-    m_cache.insertPath(path, file->id());
-
-    qCDebug(ONEDRIVE) << "Resolved" << path << "to" << file->id() << "(from network)";
-    return {KIO::WorkerResult::pass(), file->id()};
+    return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, path), QString()};
 }
 
 QString KIOGDrive::resolveSharedDriveId(const QString &idOrName, const QString &accountId)
@@ -1081,44 +1031,33 @@ KIO::WorkerResult KIOGDrive::stat(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    const QUrlQuery urlQuery(url);
-    QString fileId;
-
-    if (urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        fileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(url.adjusted(QUrl::StripTrailingSlash).path(), KIOGDrive::None);
-
-        if (!result.success()) {
-            return result;
+    if (gdriveUrl.isSharedWithMe()) {
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return keyResult;
         }
-        fileId = id;
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+        }
+
+        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
+            }
+            if (graphItem.httpStatus == 404) {
+                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+            }
+            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
+        }
+
+        const KIO::UDSEntry entry = driveItemToEntry(graphItem.item);
+        statEntry(entry);
+        return KIO::WorkerResult::pass();
     }
 
-    if (fileId.isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-    }
-
-    FileFetchJob fileFetchJob(fileId, getAccount(accountId));
-    if (auto result = runJob(fileFetchJob, url, accountId); !result.success()) {
-        qCDebug(ONEDRIVE) << "Failed stat()ing file" << fileFetchJob.errorString();
-        return result;
-    }
-
-    const ObjectsList objects = fileFetchJob.items();
-    if (objects.count() != 1) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-    }
-
-    const FilePtr file = objects.first().dynamicCast<File>();
-    if (file->labels()->trashed()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-    }
-
-    const KIO::UDSEntry entry = fileToUDSEntry(file, gdriveUrl.parentPath());
-
-    statEntry(entry);
-    return KIO::WorkerResult::pass();
+    return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
 }
 
 KIO::WorkerResult KIOGDrive::get(const QUrl &url)
@@ -1249,68 +1188,7 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
 
-    const QUrlQuery urlQuery(url);
-    QString fileId;
-
-    if (urlQuery.hasQueryItem(QStringLiteral("id"))) {
-        fileId = urlQuery.queryItemValue(QStringLiteral("id"));
-    } else {
-        const auto [result, id] = resolveFileIdFromPath(url.adjusted(QUrl::StripTrailingSlash).path(), KIOGDrive::PathIsFile);
-
-        if (!result.success()) {
-            return result;
-        }
-        fileId = id;
-    }
-    if (fileId.isEmpty()) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-    }
-
-    FileFetchJob fileFetchJob(fileId, getAccount(accountId));
-    fileFetchJob.setFields({File::Fields::Id, File::Fields::MimeType, File::Fields::ExportLinks, File::Fields::DownloadUrl});
-    if (auto result = runJob(fileFetchJob, url, accountId); !result.success()) {
-        return result;
-    }
-
-    const ObjectsList objects = fileFetchJob.items();
-    if (objects.count() != 1) {
-        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.fileName());
-    }
-
-    FilePtr file = objects.first().dynamicCast<File>();
-    QUrl downloadUrl;
-    if (GDriveHelper::isGDocsDocument(file)) {
-        downloadUrl = GDriveHelper::convertFromGDocs(file);
-    } else {
-        downloadUrl = GDriveHelper::downloadUrl(file);
-    }
-
-    mimeType(file->mimeType());
-
-    FileFetchContentJob contentJob(downloadUrl, getAccount(accountId));
-    QObject::connect(&contentJob, &KGAPI2::Job::progress, [this](KGAPI2::Job *, int processed, int total) {
-        processedSize(processed);
-        totalSize(total);
-    });
-    if (auto result = runJob(contentJob, url, accountId); !result.success()) {
-        return result;
-    }
-
-    QByteArray contentData = contentJob.data();
-
-    processedSize(contentData.size());
-    totalSize(contentData.size());
-
-    // data() has a maximum transfer size of 14 MiB so we need to send it in chunks.
-    // See TransferJob::slotDataReq.
-    int transferred = 0;
-    // do-while loop to call data() even for empty files.
-    do {
-        const size_t nextChunk = qMin(contentData.size() - transferred, 14 * 1024 * 1024);
-        data(QByteArray::fromRawData(contentData.constData() + transferred, nextChunk));
-        transferred += nextChunk;
-    } while (transferred < contentData.size());
-    return KIO::WorkerResult::pass();
+    return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
 }
 
 KIO::WorkerResult KIOGDrive::readPutData(QTemporaryFile &tempFile, const QString &fileName, QString *detectedMimeType)
