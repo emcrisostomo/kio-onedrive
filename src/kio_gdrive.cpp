@@ -545,6 +545,22 @@ KIO::UDSEntry KIOGDrive::driveItemToEntry(const OneDrive::DriveItem &item) const
     if (item.lastModified.isValid()) {
         entry.fastInsert(KIO::UDSEntry::UDS_MODIFICATION_TIME, item.lastModified.toSecsSinceEpoch());
     }
+    if (item.createdTime.isValid()) {
+        entry.fastInsert(KIO::UDSEntry::UDS_CREATION_TIME, item.createdTime.toSecsSinceEpoch());
+    }
+
+    if (!item.id.isEmpty()) {
+        entry.fastInsert(OneDriveUDSEntryExtras::Id, item.id);
+    }
+    if (!item.webUrl.isEmpty()) {
+        entry.fastInsert(OneDriveUDSEntryExtras::Url, item.webUrl);
+    }
+    if (!item.lastModifiedBy.isEmpty()) {
+        entry.fastInsert(OneDriveUDSEntryExtras::LastModifyingUser, item.lastModifiedBy);
+    }
+    if (!item.createdBy.isEmpty()) {
+        entry.fastInsert(OneDriveUDSEntryExtras::Owners, item.createdBy);
+    }
 
     entry.fastInsert(KIO::UDSEntry::UDS_ACCESS, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
     return entry;

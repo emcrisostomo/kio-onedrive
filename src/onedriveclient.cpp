@@ -47,7 +47,9 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    query.addQueryItem(QStringLiteral("$select"),
+                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
+                                      "createdBy,lastModifiedBy"));
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -95,7 +97,9 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
 
     QUrlQuery query;
     query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    query.addQueryItem(QStringLiteral("$select"),
+                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
+                                      "createdBy,lastModifiedBy"));
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -142,7 +146,9 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     }
 
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    query.addQueryItem(QStringLiteral("$select"),
+                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
+                                      "createdBy,lastModifiedBy"));
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -422,8 +428,19 @@ DriveItem Client::parseItem(const QJsonObject &object) const
     item.name = object.value(QStringLiteral("name")).toString();
     item.size = static_cast<qint64>(object.value(QStringLiteral("size")).toDouble());
     item.lastModified = QDateTime::fromString(object.value(QStringLiteral("lastModifiedDateTime")).toString(), Qt::ISODate);
+    item.createdTime = QDateTime::fromString(object.value(QStringLiteral("createdDateTime")).toString(), Qt::ISODate);
     item.isFolder = object.contains(QStringLiteral("folder"));
     item.downloadUrl = object.value(QStringLiteral("@microsoft.graph.downloadUrl")).toString();
+    item.webUrl = object.value(QStringLiteral("webUrl")).toString();
+
+    if (const auto createdByObj = object.value(QStringLiteral("createdBy")).toObject(); !createdByObj.isEmpty()) {
+        const auto userObj = createdByObj.value(QStringLiteral("user")).toObject();
+        item.createdBy = userObj.value(QStringLiteral("displayName")).toString();
+    }
+    if (const auto lastModifiedByObj = object.value(QStringLiteral("lastModifiedBy")).toObject(); !lastModifiedByObj.isEmpty()) {
+        const auto userObj = lastModifiedByObj.value(QStringLiteral("user")).toObject();
+        item.lastModifiedBy = userObj.value(QStringLiteral("displayName")).toString();
+    }
 
     const QJsonObject parent = object.value(QStringLiteral("parentReference")).toObject();
     item.parentId = parent.value(QStringLiteral("id")).toString();

@@ -28,6 +28,10 @@ struct DriveItem {
     QString remoteItemId;
     QString mimeType;
     QString downloadUrl;
+    QString webUrl;
+    QString createdBy;
+    QString lastModifiedBy;
+    QDateTime createdTime;
     bool isFolder = false;
     qint64 size = 0;
     QDateTime lastModified;
