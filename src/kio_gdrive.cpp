@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2013-2014 Daniel Vrátil <dvratil@redhat.com>
+ * SPDX-FileCopyrightText: 2025 Enrico M. Crisostomo <enrico.crisostomo@gmail.com>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
