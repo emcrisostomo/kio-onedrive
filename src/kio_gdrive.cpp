@@ -1114,7 +1114,17 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
             mimeType(mime.name());
         }
 
-        const auto downloadResult = m_graphClient.downloadItem(account->accessToken(), graphItem.item.id, graphItem.item.downloadUrl);
+        auto currentAccount = account;
+        auto tryDownload = [&](const QString &token) {
+            return m_graphClient.downloadItem(token, graphItem.item.id, graphItem.item.downloadUrl, graphItem.item.driveId);
+        };
+        auto downloadResult = tryDownload(currentAccount->accessToken());
+        if (!downloadResult.success && (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403)) {
+            currentAccount = m_accountManager->refreshAccount(currentAccount);
+            if (currentAccount && !currentAccount->accessToken().isEmpty()) {
+                downloadResult = tryDownload(currentAccount->accessToken());
+            }
+        }
         if (!downloadResult.success) {
             if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
                 return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
@@ -1163,7 +1173,17 @@ KIO::WorkerResult KIOGDrive::get(const QUrl &url)
             mimeType(mime.name());
         }
 
-        const auto downloadResult = m_graphClient.downloadItem(account->accessToken(), graphItem.item.id, graphItem.item.downloadUrl);
+        auto currentAccount = account;
+        auto tryDownload = [&](const QString &token) {
+            return m_graphClient.downloadItem(token, graphItem.item.id, graphItem.item.downloadUrl, graphItem.item.driveId);
+        };
+        auto downloadResult = tryDownload(currentAccount->accessToken());
+        if (!downloadResult.success && (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403)) {
+            currentAccount = m_accountManager->refreshAccount(currentAccount);
+            if (currentAccount && !currentAccount->accessToken().isEmpty()) {
+                downloadResult = tryDownload(currentAccount->accessToken());
+            }
+        }
         if (!downloadResult.success) {
             qCWarning(ONEDRIVE) << "Failed downloading" << relativePath << downloadResult.httpStatus << downloadResult.errorMessage;
             if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {

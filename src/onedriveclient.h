@@ -98,7 +98,8 @@ public:
     [[nodiscard]] ListChildrenResult listChildrenByPath(const QString &accessToken, const QString &relativePath);
     [[nodiscard]] DriveItemResult getItemByPath(const QString &accessToken, const QString &relativePath);
     [[nodiscard]] DriveItemResult getItemById(const QString &accessToken, const QString &driveId, const QString &itemId);
-    [[nodiscard]] DownloadResult downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString());
+    [[nodiscard]] DownloadResult
+    downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString(), const QString &driveId = QString());
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
     [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
     [[nodiscard]] DriveItemResult getDriveItemByPath(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &relativePath);
