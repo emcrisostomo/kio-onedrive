@@ -17,7 +17,7 @@ QList<QUrl> arrayToList(const QJsonArray &array)
     return ret;
 }
 
-void GDriveJob::start()
+void OneDriveJob::start()
 {
     const QString accountName = data().value(QStringLiteral("accountName")).toString();
     QString folder = data().value(QStringLiteral("folder")).toString();

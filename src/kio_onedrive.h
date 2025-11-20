@@ -21,7 +21,7 @@ class AbstractAccountManager;
 
 class QTemporaryFile;
 
-class KIOGDrive : public KIO::WorkerBase
+class KIOOneDrive : public KIO::WorkerBase
 {
 public:
     enum Action {
@@ -30,8 +30,8 @@ public:
         Restart,
     };
 
-    explicit KIOGDrive(const QByteArray &protocol, const QByteArray &pool_socket, const QByteArray &app_socket);
-    ~KIOGDrive() override;
+    explicit KIOOneDrive(const QByteArray &protocol, const QByteArray &pool_socket, const QByteArray &app_socket);
+    ~KIOOneDrive() override;
 
     virtual KIO::WorkerResult openConnection() Q_DECL_OVERRIDE;
     virtual KIO::WorkerResult listDir(const QUrl &url) Q_DECL_OVERRIDE;
@@ -49,7 +49,7 @@ public:
     KIO::WorkerResult fileSystemFreeSpace(const QUrl &url) Q_DECL_OVERRIDE;
 
 private:
-    Q_DISABLE_COPY(KIOGDrive)
+    Q_DISABLE_COPY(KIOOneDrive)
 
     enum PathFlags {
         None = 0,

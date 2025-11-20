@@ -24,7 +24,7 @@ public:
 
     Purpose::Job *createJob() const override
     {
-        return new GDriveJob(nullptr);
+        return new OneDriveJob(nullptr);
     }
 };
 
