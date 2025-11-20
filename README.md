@@ -1,5 +1,3 @@
-https://community.kde.org/KIO_OneDrive
-
 Hello there, lonely wanderer and welcome to the magical land of Microsoft OneDrive!
 
 
