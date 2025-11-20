@@ -7,7 +7,6 @@ set(kio_onedrive_SRCS
     kio_gdrive.cpp
     pathcache.cpp
     abstractaccountmanager.cpp
-    gdrivehelper.cpp
     gdriveurl.cpp
     onedriveclient.cpp)
 
@@ -35,7 +34,5 @@ target_link_libraries(kio_onedrive
     KF6::KIOWidgets
     KF6::I18n
     ${BACKEND_LIBS})
-
-target_link_libraries(kio_onedrive KPim6::GAPICore KPim6::GAPIDrive)
 
 set_target_properties(kio_onedrive PROPERTIES OUTPUT_NAME "onedrive")

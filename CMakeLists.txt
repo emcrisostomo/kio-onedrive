@@ -9,8 +9,6 @@ project(kio-onedrive VERSION ${RELEASE_SERVICE_VERSION})
 
 set(QT_MIN_VERSION 6.5.0)
 set(KF_MIN_VERSION 6.3.0)
-# TODO: bump to 6.3.0 after release/24.12 gets branched
-set(KGAPI_MIN_VERSION 6.2.40)
 set(KACCOUNTS_MIN_VERSION 24.08.0)
 set(QTKEYCHAIN_MIN_VERSION 0.12.0)
 
@@ -36,8 +34,6 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS
     I18n
     DocTools
     KIO)
-
-find_package(KPim6GAPI ${KGAPI_MIN_VERSION} REQUIRED)
 
 find_package(KF6Purpose ${KF_MIN_VERSION}) # Optional since it depends on KAccounts
 
