@@ -9,10 +9,10 @@
 #ifndef KIO_GDRIVE_H
 #define KIO_GDRIVE_H
 
+#include "onedriveaccount.h"
 #include "onedriveclient.h"
 #include "pathcache.h"
 
-#include <KGAPI/Account>
 #include <KIO/WorkerBase>
 
 #include <memory>
@@ -76,14 +76,14 @@ private:
     [[nodiscard]] KIO::UDSEntry fetchSharedDrivesRootEntry(const QString &accountId, FetchEntryFlags flags = FetchEntryFlags::None);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveFileIdFromPath(const QString &path, PathFlags flags = None);
-    [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
+    [[nodiscard]] std::pair<KIO::WorkerResult, QString> resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account);
     QString resolveSharedDriveId(const QString &idOrName, const QString &accountId);
 
-    KGAPI2::AccountPtr getAccount(const QString &accountName);
+    OneDriveAccountPtr getAccount(const QString &accountName);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
-    [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account);
-    [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath);
+    [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account);
+    [[nodiscard]] KIO::WorkerResult listFolderByPath(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account, const QString &relativePath);
     [[nodiscard]] KIO::UDSEntry driveItemToEntry(const OneDrive::DriveItem &item) const;
     void cacheSharedWithMeEntries(const QString &accountId, const QList<OneDrive::DriveItem> &items);
 

@@ -99,7 +99,7 @@ KIO::WorkerResult KIOGDrive::fileSystemFreeSpace(const QUrl &url)
     return KIO::WorkerResult::pass();
 }
 
-KGAPI2::AccountPtr KIOGDrive::getAccount(const QString &accountName)
+OneDriveAccountPtr KIOGDrive::getAccount(const QString &accountName)
 {
     return m_accountManager->account(accountName);
 }
@@ -152,7 +152,7 @@ KIO::UDSEntry KIOGDrive::accountToUDSEntry(const QString &accountNAme)
 
 KIO::WorkerResult KIOGDrive::createAccount()
 {
-    const KGAPI2::AccountPtr account = m_accountManager->createAccount();
+    const OneDriveAccountPtr account = m_accountManager->createAccount();
     if (!account->accountName().isEmpty()) {
         // Redirect to the account we just created.
         redirection(QUrl(QStringLiteral("onedrive:/%1").arg(account->accountName())));
@@ -331,7 +331,7 @@ private:
 
 int RecursionDepthCounter::sDepth = 0;
 
-std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
+std::pair<KIO::WorkerResult, QString> KIOGDrive::resolveSharedWithMeKey(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account)
 {
     QString remoteKey = m_cache.idForPath(url.path());
     if (!remoteKey.isEmpty()) {
@@ -560,7 +560,7 @@ void KIOGDrive::cacheSharedWithMeEntries(const QString &accountId, const QList<O
     }
 }
 
-KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account)
+KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account)
 {
     auto sharedWithMeEntry = sharedWithMeUDSEntry();
     listEntry(sharedWithMeEntry);
@@ -568,7 +568,7 @@ KIO::WorkerResult KIOGDrive::listAccountRoot(const QUrl &url, const QString &acc
     return listFolderByPath(url, accountId, account, QString());
 }
 
-KIO::WorkerResult KIOGDrive::listFolderByPath(const QUrl &url, const QString &accountId, const KGAPI2::AccountPtr &account, const QString &relativePath)
+KIO::WorkerResult KIOGDrive::listFolderByPath(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account, const QString &relativePath)
 {
     const auto graphResult =
         relativePath.isEmpty() ? m_graphClient.listChildren(account->accessToken()) : m_graphClient.listChildrenByPath(account->accessToken(), relativePath);
