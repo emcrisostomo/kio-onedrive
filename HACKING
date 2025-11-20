@@ -2,7 +2,7 @@ Install to custom prefix
 =========================
 
 You can install kio-onedrive to your preferred installation prefix,
-as long as kdeinit5 has been installed in the same prefix.
+as long as the KDE runtime (kdeinit6) has been installed in the same prefix.
 
 Locate Debug Output
 ===================
@@ -13,9 +13,9 @@ A quick way to locate the relevant logs is the following command:
 
     journalctl -b | grep kf.kio.workers.onedrive
 
-This will only show the logs since the last boot. To retrieve also older logs, you can filter the messages by the process who emitted them (kdeinit5):
+This will only show the logs since the last boot. To retrieve also older logs, you can filter the messages by the process who emitted them (kdeinit6):
 
-    journalctl $(which kdeinit5) | grep kf.kio.workers.onedrive
+    journalctl $(which kdeinit6) | grep kf.kio.workers.onedrive
 
 Enable Debug Output
 ===================
@@ -24,7 +24,7 @@ Th onedrive worker uses categorized debug output. Normally you would enable its 
 
     export QT_LOGGING_RULES="kf.kio.workers.onedrive.debug=true"
 
-However, you need to make sure this variable is present in the environment of kdeinit5,
+However, you need to make sure this variable is present in the environment of kdeinit6,
 which is the process that starts the ioworker.
 
 A simpler alternative is to create (or edit) ~/.config/QtProject/qtlogging.ini with the following content:
