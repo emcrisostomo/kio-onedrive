@@ -1,24 +1,21 @@
 /*
  * SPDX-FileCopyrightText: 2017 Elvis Angelaccio <elvis.angelaccio@kde.org>
+ * SPDX-FileCopyrightText: 2025 Enrico M. Crisostomo <enrico.crisostomo@gmail.com>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
  */
 
 #include "kaccountsmanager.h"
-#include "gdrivehelper.h"
+#include "onedriveaccount.h"
 #include "onedrivedebug.h"
 
 #include <Accounts/Manager>
 #include <Accounts/Provider>
 #include <KAccounts/Core>
 #include <KAccounts/GetCredentialsJob>
-#include <KGAPI/Account>
-
 #include <QProcess>
 #include <QStandardPaths>
-
-using namespace KGAPI2;
 
 KAccountsManager::KAccountsManager()
 {
@@ -29,7 +26,7 @@ KAccountsManager::~KAccountsManager()
 {
 }
 
-AccountPtr KAccountsManager::account(const QString &accountName)
+OneDriveAccountPtr KAccountsManager::account(const QString &accountName)
 {
     const auto accounts = m_accounts.values();
     for (const auto &account : accounts) {
@@ -38,13 +35,13 @@ AccountPtr KAccountsManager::account(const QString &accountName)
         }
     }
 
-    return AccountPtr(new Account());
+    return std::make_shared<OneDriveAccount>();
 }
 
-AccountPtr KAccountsManager::createAccount()
+OneDriveAccountPtr KAccountsManager::createAccount()
 {
     if (QStandardPaths::findExecutable(QStringLiteral("kcmshell6")).isEmpty()) {
-        return AccountPtr(new Account());
+        return std::make_shared<OneDriveAccount>();
     }
 
     const auto oldAccounts = accounts();
@@ -70,10 +67,10 @@ AccountPtr KAccountsManager::createAccount()
 
     // No accounts at all or no new account(s).
     qCDebug(ONEDRIVE) << "No new account created.";
-    return AccountPtr(new Account());
+    return std::make_shared<OneDriveAccount>();
 }
 
-AccountPtr KAccountsManager::refreshAccount(const AccountPtr &account)
+OneDriveAccountPtr KAccountsManager::refreshAccount(const OneDriveAccountPtr &account)
 {
     const QString accountName = account->accountName();
     for (auto it = m_accounts.constBegin(); it != m_accounts.constEnd(); ++it) {
@@ -156,7 +153,15 @@ void KAccountsManager::loadAccounts()
     }
 }
 
-AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const QString &displayName)
+static QString elideToken(const QString &token)
+{
+    if (token.size() <= 8) {
+        return token;
+    }
+    return token.left(4) + QStringLiteral("...") + token.right(4);
+}
+
+OneDriveAccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const QString &displayName)
 {
     auto job = new KAccounts::GetCredentialsJob(id, nullptr);
     job->exec();
@@ -164,18 +169,14 @@ AccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const
         qCWarning(ONEDRIVE) << "GetCredentialsJob failed:" << job->errorString();
     }
 
-    auto cloudAccount = AccountPtr(new Account(displayName,
-                                               job->credentialsData().value(QStringLiteral("AccessToken")).toString(),
-                                               job->credentialsData().value(QStringLiteral("RefreshToken")).toString()));
+    auto cloudAccount = std::make_shared<OneDriveAccount>();
+    cloudAccount->name = displayName;
+    cloudAccount->token = job->credentialsData().value(QStringLiteral("AccessToken")).toString();
+    cloudAccount->refresh = job->credentialsData().value(QStringLiteral("RefreshToken")).toString();
+    cloudAccount->scopes = job->credentialsData().value(QStringLiteral("Scope")).toStringList();
 
-    const auto scopes = job->credentialsData().value(QStringLiteral("Scope")).toStringList();
-    for (const auto &scope : scopes) {
-        cloudAccount->addScope(QUrl::fromUserInput(scope));
-    }
-
-    qCDebug(ONEDRIVE) << "Got account credentials for:" << cloudAccount->accountName()
-                      << ", accessToken:" << GDriveHelper::elideToken(cloudAccount->accessToken())
-                      << ", refreshToken:" << GDriveHelper::elideToken(cloudAccount->refreshToken()) << ", scopes:" << scopes;
+    qCDebug(ONEDRIVE) << "Got account credentials for:" << cloudAccount->accountName() << ", accessToken:" << elideToken(cloudAccount->accessToken())
+                      << ", refreshToken:" << elideToken(cloudAccount->refreshToken()) << ", scopes:" << cloudAccount->scopes;
 
     return cloudAccount;
 }

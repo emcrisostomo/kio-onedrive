@@ -7,10 +7,9 @@
 
 #pragma once
 
-#include <QSet>
+#include "onedriveaccount.h"
 
-#include <KGAPI/Account>
-#include <KIO/UDSEntry>
+#include <QSet>
 
 class AbstractAccountManager
 {
@@ -22,15 +21,15 @@ public:
      * The account is valid only if @p accountName is in accounts().
      * @see accounts()
      */
-    virtual KGAPI2::AccountPtr account(const QString &accountName) = 0;
+    virtual OneDriveAccountPtr account(const QString &accountName) = 0;
 
     /**
      * Creates a new account.
      * @return The new account if a new account has been created, an invalid account otherwise.
      */
-    virtual KGAPI2::AccountPtr createAccount() = 0;
+    virtual OneDriveAccountPtr createAccount() = 0;
 
-    virtual KGAPI2::AccountPtr refreshAccount(const KGAPI2::AccountPtr &account) = 0;
+    virtual OneDriveAccountPtr refreshAccount(const OneDriveAccountPtr &account) = 0;
 
     /**
      * Remove @p accountName from accounts().
