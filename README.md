@@ -15,6 +15,13 @@ items), and upload/download files **as if they were local**.
 * Rename, copy/move, and delete entries inside personal drives (shared drives not yet supported).
 * Reports quota and free space metadata for account paths.
 
+
+## Limitations
+
+The worker issues Microsoft Graph API requests synchronously: as a consequence,
+long uploads or downloads can block the worker until the reply returns.
+Cancellation and responsiveness are limited during those operations.
+
 ## Building with kde-builder
 
 Using `kde-builder` is the recommended way to build and develop this project.
