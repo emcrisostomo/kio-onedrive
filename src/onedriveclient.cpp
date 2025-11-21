@@ -22,6 +22,62 @@
 
 using namespace OneDrive;
 
+namespace
+{
+const QString GraphBaseUrl = QStringLiteral("https://graph.microsoft.com");
+const QString QueryTopKey = QStringLiteral("$top");
+const QString QuerySelectKey = QStringLiteral("$select");
+const QString DefaultPageSize = QStringLiteral("200");
+const QString SelectItemFields = QStringLiteral(
+    "id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,createdBy,lastModifiedBy");
+const QString SelectMinimalItemFields = QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl");
+const QString SelectSharedWithMeFields =
+    QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl,remoteItem,remoteItem.parentReference");
+
+const QByteArray HeaderAuthorization = QByteArrayLiteral("Authorization");
+const QByteArray HeaderBearerPrefix = QByteArrayLiteral("Bearer ");
+const QByteArray HeaderRequestId = QByteArrayLiteral("request-id");
+const QByteArray HeaderLocation = QByteArrayLiteral("Location");
+const QByteArray HeaderAccept = QByteArrayLiteral("Accept");
+
+const QString MimeApplicationJson = QStringLiteral("application/json");
+const QString MimeOctetStream = QStringLiteral("application/octet-stream");
+const QString MimeDirectory = QStringLiteral("inode/directory");
+
+constexpr int CopyMonitorTimeoutMs = 120000;
+constexpr int CopyMonitorDelayMs = 500;
+
+QUrl graphUrl(const QString &path, QUrl::ParsingMode parsingMode = QUrl::DecodedMode)
+{
+    QUrl url(GraphBaseUrl);
+    url.setPath(path, parsingMode);
+    return url;
+}
+
+QUrlQuery listingQuery()
+{
+    QUrlQuery query;
+    query.addQueryItem(QueryTopKey, DefaultPageSize);
+    query.addQueryItem(QuerySelectKey, SelectItemFields);
+    return query;
+}
+
+QUrlQuery minimalListingQuery()
+{
+    QUrlQuery query;
+    query.addQueryItem(QueryTopKey, DefaultPageSize);
+    query.addQueryItem(QuerySelectKey, SelectMinimalItemFields);
+    return query;
+}
+
+QUrlQuery selectQuery(const QString &fields)
+{
+    QUrlQuery query;
+    query.addQueryItem(QuerySelectKey, fields);
+    return query;
+}
+} // namespace
+
 Client::Client(QObject *parent)
     : QObject(parent)
 {
@@ -36,20 +92,13 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/root/children"));
-    } else if (itemId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/root/children"));
+    if (!driveId.isEmpty()) {
+        url = graphUrl(itemId.isEmpty() ? QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId)
+                                        : QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
     }
 
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(QStringLiteral("$select"),
-                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
-                                      "createdBy,lastModifiedBy"));
+    QUrlQuery query = listingQuery();
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -92,14 +141,9 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(cleanedPath), QUrl::DecodedMode);
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(cleanedPath), QUrl::DecodedMode);
 
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(QStringLiteral("$select"),
-                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
-                                      "createdBy,lastModifiedBy"));
+    QUrlQuery query = listingQuery();
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -138,17 +182,10 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     }
 
     const QString cleanedPath = relativePath.trimmed();
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (cleanedPath.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/root"));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:").arg(cleanedPath), QUrl::DecodedMode);
-    }
+    QUrl url = graphUrl(cleanedPath.isEmpty() ? QStringLiteral("/v1.0/me/drive/root") : QStringLiteral("/v1.0/me/drive/root:/%1:").arg(cleanedPath),
+                        QUrl::DecodedMode);
 
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"),
-                       QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,createdDateTime,@microsoft.graph.downloadUrl,webUrl,"
-                                      "createdBy,lastModifiedBy"));
+    QUrlQuery query = selectQuery(SelectItemFields);
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -161,7 +198,7 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
         result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        const QString requestId = QString::fromUtf8(reply->rawHeader(QByteArrayLiteral("request-id")));
+        const QString requestId = QString::fromUtf8(reply->rawHeader(HeaderRequestId));
         qCWarning(ONEDRIVE) << "Graph getItemByPath failed" << url << result.httpStatus << result.errorMessage << "requestId:" << requestId;
         reply->deleteLater();
         return result;
@@ -184,14 +221,9 @@ DriveItemResult Client::getItemById(const QString &accessToken, const QString &d
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
-    }
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    QUrl url =
+        graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId) : QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    QUrlQuery query = selectQuery(SelectMinimalItemFields);
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -225,16 +257,13 @@ DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QSt
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
     const QString cleanedPath = relativePath.trimmed();
-    if (cleanedPath.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2:/%3:").arg(driveId, itemId, cleanedPath), QUrl::DecodedMode);
+    if (!cleanedPath.isEmpty()) {
+        url = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2:/%3:").arg(driveId, itemId, cleanedPath), QUrl::DecodedMode);
     }
 
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    QUrlQuery query = selectQuery(SelectMinimalItemFields);
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -272,7 +301,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
         req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
         req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
         if (withAuth && !accessToken.isEmpty()) {
-            req.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
+            req.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
         }
 
         QNetworkReply *reply = m_network.get(req);
@@ -308,7 +337,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
             }
 
             if (withAuth) {
-                redirectReq.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
+                redirectReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
                 QNetworkReply *redirectReplyAuth = m_network.get(redirectReq);
                 QEventLoop redirectLoopAuth;
                 connect(redirectReplyAuth, &QNetworkReply::finished, &redirectLoopAuth, &QEventLoop::quit);
@@ -374,16 +403,14 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
         qCWarning(ONEDRIVE) << "Download URL missing for item" << itemId << "- falling back to Graph content endpoints";
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
     QNetworkRequest bearerReq = buildRequest(accessToken, url);
     if (tryDownload(bearerReq, true, "me-content")) {
         return result;
     }
 
     if (!driveId.isEmpty()) {
-        QUrl driveUrl(QStringLiteral("https://graph.microsoft.com"));
-        driveUrl.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
+        QUrl driveUrl = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
         QNetworkRequest driveReq = buildRequest(accessToken, driveUrl);
         if (tryDownload(driveReq, true, "drive-content")) {
             return result;
@@ -399,8 +426,8 @@ QNetworkRequest Client::buildRequest(const QString &accessToken, const QUrl &url
     // Microsoft Graph occasionally breaks newer HTTP/2 sessions, so stick to HTTP/1.1.
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-    request.setRawHeader("Authorization", "Bearer " + accessToken.toUtf8());
-    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    request.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
+    request.setHeader(QNetworkRequest::ContentTypeHeader, MimeApplicationJson);
     return request;
 }
 
@@ -458,7 +485,7 @@ DriveItem Client::parseItem(const QJsonObject &object) const
     if (!fileObj.isEmpty()) {
         item.mimeType = fileObj.value(QStringLiteral("mimeType")).toString();
     } else if (item.isFolder) {
-        item.mimeType = QStringLiteral("inode/directory");
+        item.mimeType = MimeDirectory;
     }
 
     return item;
@@ -472,14 +499,11 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    url.setPath(QStringLiteral("/v1.0/me/drive/sharedWithMe"));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/sharedWithMe"));
 
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(
-        QStringLiteral("$select"),
-        QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl,remoteItem,remoteItem.parentReference"));
+    query.addQueryItem(QueryTopKey, DefaultPageSize);
+    query.addQueryItem(QuerySelectKey, SelectSharedWithMeFields);
     url.setQuery(query);
 
     const QNetworkRequest request = buildRequest(accessToken, url);
@@ -524,7 +548,7 @@ DrivesResult Client::listSharedDrives(const QString &accessToken)
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com/v1.0/me/drives"));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drives"));
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
 
     QEventLoop loop;
@@ -564,9 +588,8 @@ QuotaResult Client::fetchDriveQuota(const QString &accessToken)
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com/v1.0/me/drive"));
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("quota"));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive"));
+    QUrlQuery query = selectQuery(QStringLiteral("quota"));
     url.setQuery(query);
 
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
@@ -601,16 +624,10 @@ ListChildrenResult Client::listDriveChildren(const QString &accessToken, const Q
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (itemId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
-    }
+    QUrl url = graphUrl(itemId.isEmpty() ? QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId)
+                                         : QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, itemId));
 
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$top"), QStringLiteral("200"));
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    QUrlQuery query = minimalListingQuery();
     url.setQuery(query);
 
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
@@ -645,12 +662,8 @@ DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemI
         return result;
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
-    }
+    QUrl url =
+        graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId) : QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
 
     QNetworkReply *reply = m_network.deleteResource(buildRequest(accessToken, url));
     QEventLoop loop;
@@ -672,7 +685,7 @@ DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemI
 
 static QString effectiveMimeType(const QString &mimeType)
 {
-    return mimeType.isEmpty() ? QStringLiteral("application/octet-stream") : mimeType;
+    return mimeType.isEmpty() ? MimeOctetStream : mimeType;
 }
 
 UploadResult Client::uploadItemByPath(const QString &accessToken, const QString &relativePath, QIODevice *source, const QString &mimeType)
@@ -690,8 +703,7 @@ UploadResult Client::uploadItemByPath(const QString &accessToken, const QString 
     }
     source->seek(0);
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    url.setPath(QStringLiteral("/v1.0/me/drive/root:/%1:/content").arg(relativePath), QUrl::DecodedMode);
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/root:/%1:/content").arg(relativePath), QUrl::DecodedMode);
 
     QNetworkRequest request = buildRequest(accessToken, url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
@@ -731,12 +743,8 @@ UploadResult Client::uploadItemById(const QString &accessToken, const QString &d
     }
     source->seek(0);
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
-    }
+    QUrl url = graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId)
+                                          : QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
 
     QNetworkRequest request = buildRequest(accessToken, url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
@@ -785,14 +793,9 @@ DriveItemResult Client::updateItem(const QString &accessToken, const QString &dr
         payload.insert(QStringLiteral("parentReference"), parentRef);
     }
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
-    }
-    QUrlQuery query;
-    query.addQueryItem(QStringLiteral("$select"), QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl"));
+    QUrl url =
+        graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId) : QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
+    QUrlQuery query = selectQuery(SelectMinimalItemFields);
     url.setQuery(query);
 
     QNetworkRequest request = buildRequest(accessToken, url);
@@ -832,12 +835,8 @@ DriveItemResult Client::createFolder(const QString &accessToken, const QString &
     payload.insert(QStringLiteral("folder"), QJsonObject());
     payload.insert(QStringLiteral("@microsoft.graph.conflictBehavior"), QStringLiteral("fail"));
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
-    if (driveId.isEmpty()) {
-        url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/children").arg(parentId));
-    } else {
-        url.setPath(QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, parentId));
-    }
+    QUrl url = graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1/children").arg(parentId)
+                                          : QStringLiteral("/v1.0/drives/%1/items/%2/children").arg(driveId, parentId));
 
     QNetworkRequest request = buildRequest(accessToken, url);
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
@@ -884,9 +883,8 @@ DriveItemResult Client::copyItem(const QString &accessToken,
     parentRef.insert(QStringLiteral("path"), parentPath);
     payload.insert(QStringLiteral("parentReference"), parentRef);
 
-    QUrl url(QStringLiteral("https://graph.microsoft.com"));
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/items/%1/copy").arg(itemId));
     Q_UNUSED(driveId)
-    url.setPath(QStringLiteral("/v1.0/me/drive/items/%1/copy").arg(itemId));
 
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     qCDebug(ONEDRIVE) << "Graph copy POST" << url << body;
@@ -904,7 +902,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QByteArray immediateData = reply->readAll();
-    const QString monitorUrl = QString::fromUtf8(reply->rawHeader("Location"));
+    const QString monitorUrl = QString::fromUtf8(reply->rawHeader(HeaderLocation));
     reply->deleteLater();
 
     if (status == 200 || status == 201) {
@@ -919,7 +917,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
     if (status != 202 || monitorUrl.isEmpty()) {
         result.httpStatus = status;
         result.errorMessage = immediateData.isEmpty() ? QStringLiteral("Failed to start copy operation") : QString::fromUtf8(immediateData);
-        const QString requestId = QString::fromUtf8(reply->rawHeader(QByteArrayLiteral("request-id")));
+        const QString requestId = QString::fromUtf8(reply->rawHeader(HeaderRequestId));
         qCWarning(ONEDRIVE) << "Graph copy POST unexpected response" << status << result.errorMessage << "requestId:" << requestId;
         return result;
     }
@@ -960,12 +958,10 @@ DriveItemResult Client::copyItem(const QString &accessToken,
 
     QElapsedTimer timer;
     timer.start();
-    const int timeoutMs = 120000;
-    const int delayMs = 500;
 
-    while (timer.elapsed() < timeoutMs) {
+    while (timer.elapsed() < CopyMonitorTimeoutMs) {
         QNetworkRequest monitorRequest = buildRequest(accessToken, QUrl(monitorUrl));
-        monitorRequest.setRawHeader(QByteArrayLiteral("Accept"), QByteArrayLiteral("application/json"));
+        monitorRequest.setRawHeader(HeaderAccept, MimeApplicationJson.toUtf8());
         QNetworkReply *monitorReply = m_network.get(monitorRequest);
         QEventLoop monitorLoop;
         connect(monitorReply, &QNetworkReply::finished, &monitorLoop, &QEventLoop::quit);
@@ -988,15 +984,15 @@ DriveItemResult Client::copyItem(const QString &accessToken,
                     monitorReply->deleteLater();
                     return destinationItem;
                 }
-                const QString requestId = QString::fromUtf8(monitorReply->rawHeader(QByteArrayLiteral("request-id")));
+                const QString requestId = QString::fromUtf8(monitorReply->rawHeader(HeaderRequestId));
                 qCDebug(ONEDRIVE) << "Graph copy monitor returned 401, retrying" << requestId;
                 monitorReply->deleteLater();
-                QThread::msleep(delayMs);
+                QThread::msleep(CopyMonitorDelayMs);
                 continue;
             }
             result.errorMessage = monitorReply->errorString();
             result.httpStatus = httpStatus;
-            const QString requestId = QString::fromUtf8(monitorReply->rawHeader(QByteArrayLiteral("request-id")));
+            const QString requestId = QString::fromUtf8(monitorReply->rawHeader(HeaderRequestId));
             qCWarning(ONEDRIVE) << "Graph copy monitor failed" << result.httpStatus << result.errorMessage << "requestId:" << requestId;
             monitorReply->deleteLater();
             return result;
@@ -1024,7 +1020,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
             return result;
         }
 
-        QThread::msleep(delayMs);
+        QThread::msleep(CopyMonitorDelayMs);
     }
 
     result.httpStatus = 504;
