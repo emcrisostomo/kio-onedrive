@@ -1,6 +1,21 @@
-Hello there, lonely wanderer and welcome to the magical land of Microsoft OneDrive!
+# What is this?
 
-# Building with kde-builder
+This project provides a KDE KIO worker that surfaces Microsoft OneDrive storage
+directly inside KDE apps and file managers.  It hooks into KDE Online Accounts
+so you can add multiple Microsoft accounts, browse drives (including shared
+items), and upload/download files **as if they were local**.
+
+## Features
+
+* Multiple OneDrive accounts via KDE Online Accounts, including an in-worker
+“New account” entry.
+* Browse drives and folders, including a “Shared With Me” virtual folder.
+* Download/open files with correct MIME detection.
+* Create folders and upload/overwrite files in personal OneDrive content.
+* Rename, copy/move, and delete entries inside personal drives (shared drives not yet supported).
+* Reports quota and free space metadata for account paths.
+
+## Building with kde-builder
 
 Using `kde-builder` is the recommended way to build and develop this project.
 For more information, see [KDE developer documentation](https://develop.kde.org/docs/getting-started/building/kde-builder-setup/)
@@ -70,7 +85,7 @@ If you want to trigger a full rebuild instead of an incremental rebuild:
 kde-builder kio-onedrive -r
 ```
 
-# Setting up the CLI to run commands from the build tree
+## Setting up the CLI to run commands from the build tree
 
 The KIO worker is built by default into the `~/kde` prefix, and the easiest way
 to try it out before installing it into your host system is by running it from
@@ -83,7 +98,7 @@ source ~/kde/build/kio-onedrive/prefix.sh
 Sourcing the auto-generated `prefix.sh` script configures your shell to run
 programs from the `~/kde` build tree (if found).
 
-# Configuring an account
+## Configuring an account
 
 The first thing you need to do to get any meaningful feature out of this project
 is configuring your own Microsoft account using the KAccounts provider.  From
@@ -102,7 +117,7 @@ new one choosing the _Microsoft_ provider:
 
 ![Create new Online Account](https://raw.githubusercontent.com/emcrisostomo/kio-onedrive/master/pictures/kaccounts-new.png)
 
-# Using the worker
+## Using the worker
 
 A KIO worker can be invoked from the CLI using `kioclient`.
 
@@ -137,7 +152,7 @@ In Dolphin you will also see all your Online Accounts in the `Network` node:
 
 ![Dolphin: Network](https://raw.githubusercontent.com/emcrisostomo/kio-onedrive/master/pictures/network.png)
 
-# Known issues
+## Known issues
 
 Some OneDrive metadata is not exposed
   Microsoft Graph omits sizes for virtual items (Office Online placeholders, shared
