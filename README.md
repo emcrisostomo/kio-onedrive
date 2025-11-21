@@ -5,6 +5,9 @@ directly inside KDE apps and file managers.  It hooks into KDE Online Accounts
 so you can add multiple Microsoft accounts, browse drives (including shared
 items), and upload/download files **as if they were local**.
 
+If you need to setup a Microsoft provider for your own tenant, or with a
+specific client ID, please read [README.enterpriseapps.md](README.enterpriseapps.md).
+
 ## Features
 
 * Multiple OneDrive accounts via KDE Online Accounts, including an in-worker
@@ -12,7 +15,8 @@ items), and upload/download files **as if they were local**.
 * Browse drives and folders, including a “Shared With Me” virtual folder.
 * Download/open files with correct MIME detection.
 * Create folders and upload/overwrite files in personal OneDrive content.
-* Rename, copy/move, and delete entries inside personal drives (shared drives not yet supported).
+* Rename, copy/move, and delete entries inside personal drives (shared drives
+are not yet supported).
 * Reports quota and free space metadata for account paths.
 * Integration with context menu actions.
 * Integration with an additional OneDrive pane in the properties dialog.
