@@ -255,8 +255,7 @@ DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QSt
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
-    const QString cleanedPath = relativePath.trimmed();
-    if (!cleanedPath.isEmpty()) {
+    if (const QString cleanedPath = relativePath.trimmed(); !cleanedPath.isEmpty()) {
         url = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2:/%3:").arg(driveId, itemId, cleanedPath), QUrl::DecodedMode);
     }
 
@@ -291,7 +290,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
         return result;
     }
 
-    auto tryDownload = [&](QNetworkRequest req, bool withAuth, const char *label) -> bool {
+    auto tryDownload = [&](QNetworkRequest req, bool withAuth, const char *label) {
         req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
         req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
         if (withAuth && !accessToken.isEmpty()) {
@@ -392,8 +391,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
-    QNetworkRequest bearerReq = buildRequest(accessToken, url);
-    if (tryDownload(bearerReq, true, "me-content")) {
+    if (QNetworkRequest bearerReq = buildRequest(accessToken, url); tryDownload(bearerReq, true, "me-content")) {
         return result;
     }
 
@@ -462,15 +460,13 @@ DriveItem Client::parseItem(const QJsonObject &object) const
     item.parentPath = parent.value(QStringLiteral("path")).toString();
     item.driveId = parent.value(QStringLiteral("driveId")).toString();
 
-    const QJsonObject remoteItem = object.value(QStringLiteral("remoteItem")).toObject();
-    if (!remoteItem.isEmpty()) {
+    if (const QJsonObject remoteItem = object.value(QStringLiteral("remoteItem")).toObject(); !remoteItem.isEmpty()) {
         const QJsonObject remoteParent = remoteItem.value(QStringLiteral("parentReference")).toObject();
         item.remoteDriveId = remoteParent.value(QStringLiteral("driveId")).toString();
         item.remoteItemId = remoteItem.value(QStringLiteral("id")).toString();
     }
 
-    const QJsonObject fileObj = object.value(QStringLiteral("file")).toObject();
-    if (!fileObj.isEmpty()) {
+    if (const QJsonObject fileObj = object.value(QStringLiteral("file")).toObject(); !fileObj.isEmpty()) {
         item.mimeType = fileObj.value(QStringLiteral("mimeType")).toString();
     } else if (item.isFolder) {
         item.mimeType = MimeDirectory;
@@ -582,7 +578,7 @@ QuotaResult Client::fetchDriveQuota(const QString &accessToken)
     const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
     const QJsonObject quota = doc.object().value(QStringLiteral("quota")).toObject();
     result.total = static_cast<qint64>(quota.value(QStringLiteral("total")).toDouble());
-    const qint64 remaining = static_cast<qint64>(quota.value(QStringLiteral("remaining")).toDouble());
+    const auto remaining = static_cast<qint64>(quota.value(QStringLiteral("remaining")).toDouble());
     result.remaining = remaining;
     result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     reply->deleteLater();
@@ -873,7 +869,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
         return result;
     }
 
-    auto finalizeResult = [&](const QJsonObject &monitorObj) -> DriveItemResult {
+    auto finalizeResult = [&](const QJsonObject &monitorObj) {
         DriveItemResult finalResult;
         QString targetId = monitorObj.value(QStringLiteral("resourceId")).toString();
         const QString resourceLocation = monitorObj.value(QStringLiteral("resourceLocation")).toString();
@@ -926,8 +922,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
                     auto finalResult = finalizeResult(monitorObj);
                     return finalResult;
                 }
-                const auto destinationItem = getItemByPath(accessToken, destinationPath);
-                if (destinationItem.success) {
+                if (const auto destinationItem = getItemByPath(accessToken, destinationPath); destinationItem.success) {
                     monitorReply->deleteLater();
                     return destinationItem;
                 }
