@@ -32,6 +32,11 @@ KIO::WorkerResult sharedDrivesUnsupported(const QUrl &url)
     Q_UNUSED(url)
     return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
 }
+
+KIO::WorkerResult personalContentUnsupported(const QString &action)
+{
+    return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be %1 for now.", action));
+}
 } // namespace
 
 class KIOPluginForMetaData : public QObject
@@ -752,7 +757,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
     };
 
     if (!isPersonalPath(oneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
+        return personalContentUnsupported(QStringLiteral("modified"));
     }
 
     const auto account = getAccount(accountId);
@@ -1161,7 +1166,7 @@ KIO::WorkerResult KIOOneDrive::putUpdate(const QUrl &url)
     };
 
     if (!isPersonalPath(oneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
+        return personalContentUnsupported(QStringLiteral("modified"));
     }
 
     const auto account = getAccount(accountId);
@@ -1209,7 +1214,7 @@ KIO::WorkerResult KIOOneDrive::putCreate(const QUrl &url)
     };
 
     if (!isPersonalPath(oneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
+        return personalContentUnsupported(QStringLiteral("modified"));
     }
 
     const auto accountId = oneDriveUrl.account();
@@ -1292,7 +1297,7 @@ KIO::WorkerResult KIOOneDrive::put(const QUrl &url, int permissions, KIO::JobFla
     };
 
     if (!isPersonalPath(oneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be modified for now."));
+        return personalContentUnsupported(QStringLiteral("modified"));
     }
 
     if (QUrlQuery(url).hasQueryItem(QStringLiteral("id"))) {
@@ -1347,7 +1352,7 @@ KIO::WorkerResult KIOOneDrive::copy(const QUrl &src, const QUrl &dest, int permi
     };
 
     if (!isPersonalPath(srcOneDriveUrl) || !isPersonalPath(destOneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be copied for now."));
+        return personalContentUnsupported(QStringLiteral("copied"));
     }
 
     const auto account = getAccount(sourceAccountId);
@@ -1535,7 +1540,7 @@ KIO::WorkerResult KIOOneDrive::rename(const QUrl &src, const QUrl &dest, KIO::Jo
     };
 
     if (!isPersonalPath(srcOneDriveUrl) || !isPersonalPath(destOneDriveUrl)) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Only personal OneDrive content can be renamed for now."));
+        return personalContentUnsupported(QStringLiteral("renamed"));
     }
 
     const auto account = getAccount(sourceAccountId);
