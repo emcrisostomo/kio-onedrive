@@ -161,7 +161,7 @@ static QString elideToken(const QString &token)
 
 OneDriveAccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const QString &displayName) const
 {
-    auto job = new KAccounts::GetCredentialsJob(id, nullptr);
+    auto job = std::make_unique<KAccounts::GetCredentialsJob>(id, nullptr);
     job->exec();
     if (job->error()) {
         qCWarning(ONEDRIVE) << "GetCredentialsJob failed:" << job->errorString();
