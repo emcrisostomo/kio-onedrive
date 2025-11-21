@@ -25,6 +25,15 @@
 #include <KIO/Job>
 #include <KLocalizedString>
 
+namespace
+{
+KIO::WorkerResult sharedDrivesUnsupported(const QUrl &url)
+{
+    Q_UNUSED(url)
+    return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+}
+} // namespace
+
 class KIOPluginForMetaData : public QObject
 {
     Q_OBJECT
@@ -236,7 +245,7 @@ KIO::WorkerResult KIOOneDrive::createSharedDrive(const QUrl &url)
 KIO::WorkerResult KIOOneDrive::deleteSharedDrive(const QUrl &url)
 {
     Q_UNUSED(url)
-    return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+    return sharedDrivesUnsupported(url);
 }
 
 KIO::WorkerResult KIOOneDrive::statSharedDrive(const QUrl &url)
@@ -642,7 +651,7 @@ KIO::WorkerResult KIOOneDrive::listDir(const QUrl &url)
     }
 
     if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
 
     if (oneDriveUrl.isSharedWithMeRoot()) {
@@ -735,7 +744,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
     }
 
     if (oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
     auto isPersonalPath = [](const OneDriveUrl &path) {
         return !path.isSharedWithMeRoot() && !path.isSharedWithMe() && !path.isSharedDrivesRoot() && !path.isSharedDrive() && !path.isTrashDir()
@@ -835,7 +844,7 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
         return KIO::WorkerResult::pass();
     }
     if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
     if (oneDriveUrl.isSharedWithMe()) {
         const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
@@ -956,7 +965,7 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
     }
 
     if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
 
     if (oneDriveUrl.isSharedWithMe()) {
@@ -1432,7 +1441,7 @@ KIO::WorkerResult KIOOneDrive::del(const QUrl &url, bool isfile)
     const auto oneDriveUrl = OneDriveUrl(url);
 
     if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
     if (oneDriveUrl.isSharedWithMe()) {
         return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Deleting shared items is not supported yet."));
@@ -1623,7 +1632,7 @@ KIO::WorkerResult KIOOneDrive::mimetype(const QUrl &url)
         return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
     }
     if (oneDriveUrl.isSharedDrivesRoot() || oneDriveUrl.isSharedDrive()) {
-        return KIO::WorkerResult::fail(KIO::ERR_UNSUPPORTED_ACTION, i18n("Shared drives are not supported yet."));
+        return sharedDrivesUnsupported(url);
     }
 
     auto emitMime = [&](const QString &name) {
