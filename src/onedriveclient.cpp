@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2024 KDE Contributors
+ * SPDX-FileCopyrightText: 2025 Enrico M. Crisostomo <enrico.crisostomo@gmail.com>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -49,7 +50,7 @@ const QString MimeDirectory = QStringLiteral("inode/directory");
 constexpr int CopyMonitorTimeoutMs = 120000;
 constexpr int CopyMonitorDelayMs = 500;
 
-void waitForFinished(QNetworkReply *reply)
+void waitForFinished(const QNetworkReply *reply)
 {
     QEventLoop loop;
     QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);

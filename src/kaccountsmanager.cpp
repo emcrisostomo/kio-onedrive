@@ -22,9 +22,7 @@ KAccountsManager::KAccountsManager()
     loadAccounts();
 }
 
-KAccountsManager::~KAccountsManager()
-{
-}
+KAccountsManager::~KAccountsManager() = default;
 
 OneDriveAccountPtr KAccountsManager::account(const QString &accountName)
 {
@@ -161,7 +159,7 @@ static QString elideToken(const QString &token)
     return token.left(4) + QStringLiteral("...") + token.right(4);
 }
 
-OneDriveAccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const QString &displayName)
+OneDriveAccountPtr KAccountsManager::getAccountCredentials(Accounts::AccountId id, const QString &displayName) const
 {
     auto job = new KAccounts::GetCredentialsJob(id, nullptr);
     job->exec();

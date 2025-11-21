@@ -29,7 +29,7 @@ public:
 private:
     void loadAccounts();
 
-    OneDriveAccountPtr getAccountCredentials(Accounts::AccountId id, const QString &displayName);
+    OneDriveAccountPtr getAccountCredentials(Accounts::AccountId id, const QString &displayName) const;
 
     QMap<Accounts::AccountId, OneDriveAccountPtr> m_accounts;
 };
