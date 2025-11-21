@@ -133,6 +133,10 @@ or
 kioclient exec "onedrive:/drive-name"
 ```
 
+In Dolphin you will also see all your Online Accounts in the `Network` node:
+
+![Dolphin: Network](https://raw.githubusercontent.com/emcrisostomo/kio-onedrive/master/pictures/network.png)
+
 # Known issues
 
 Some OneDrive metadata is not exposed
