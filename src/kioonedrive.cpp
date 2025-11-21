@@ -6,10 +6,10 @@
  *
  */
 
-#include "kio_onedrive.h"
-#include "onedrive_udsentry.h"
+#include "kioonedrive.h"
 #include "onedrivebackend.h"
 #include "onedrivedebug.h"
+#include "onedriveudsentry.h"
 #include "onedriveurl.h"
 #include "onedriveversion.h"
 
@@ -1704,4 +1704,4 @@ KIO::WorkerResult KIOOneDrive::mimetype(const QUrl &url)
     return KIO::WorkerResult::pass();
 }
 
-#include "kio_onedrive.moc"
+#include "kioonedrive.moc"

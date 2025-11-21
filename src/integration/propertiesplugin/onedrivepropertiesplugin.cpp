@@ -5,8 +5,8 @@
  */
 
 #include "onedrivepropertiesplugin.h"
-#include "../../onedrive_udsentry.h"
 #include "../../onedrivedebug.h"
+#include "../../onedriveudsentry.h"
 
 #include <KIO/StatJob>
 #include <KLocalizedString>

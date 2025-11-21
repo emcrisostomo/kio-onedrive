@@ -4,7 +4,7 @@ include_directories(${CMAKE_BINARY_DIR})
 add_subdirectory(integration)
 
 set(kio_onedrive_SRCS
-    kio_onedrive.cpp
+    kioonedrive.cpp
     pathcache.cpp
     abstractaccountmanager.cpp
     onedriveurl.cpp

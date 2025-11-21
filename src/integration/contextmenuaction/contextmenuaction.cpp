@@ -6,7 +6,7 @@
  */
 
 #include "contextmenuaction.h"
-#include "../../onedrive_udsentry.h"
+#include "../../onedriveudsentry.h"
 
 #include <QAction>
 #include <QClipboard>
