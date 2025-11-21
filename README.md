@@ -100,7 +100,7 @@ This will open the Online Accounts panel of the KDE Settings:
 From there you will be able to list your existing Online Accounts and create a
 new one choosing the _Microsoft_ provider:
 
-![Online Accounts](https://raw.githubusercontent.com/emcrisostomo/kio-onedrive/master/pictures/kaccounts-new.png)
+![Create new Online Account](https://raw.githubusercontent.com/emcrisostomo/kio-onedrive/master/pictures/kaccounts-new.png)
 
 # Using the worker
 
