@@ -49,6 +49,13 @@ const QString MimeDirectory = QStringLiteral("inode/directory");
 constexpr int CopyMonitorTimeoutMs = 120000;
 constexpr int CopyMonitorDelayMs = 500;
 
+void waitForFinished(QNetworkReply *reply)
+{
+    QEventLoop loop;
+    QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+}
+
 template<typename Result>
 Result unauthorizedResult(const QString &message)
 {
@@ -112,10 +119,7 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     const QByteArray payload = readReply(reply, result);
     if (!result.success) {
@@ -155,10 +159,7 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     const QByteArray payload = readReply(reply, result);
     if (!result.success) {
@@ -195,10 +196,7 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -231,10 +229,7 @@ DriveItemResult Client::getItemById(const QString &accessToken, const QString &d
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -269,10 +264,7 @@ DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QSt
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -306,9 +298,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
         }
 
         QNetworkReply *reply = m_network.get(req);
-        QEventLoop loop;
-        connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-        loop.exec();
+        waitForFinished(reply);
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         // Handle redirects ourselves so we can drop auth on the pre-signed URL.
@@ -325,9 +315,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
             redirectReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
             // Pre-signed URL should work anonymously; try anon first, then with auth if requested.
             QNetworkReply *redirectReply = m_network.get(redirectReq);
-            QEventLoop redirectLoop;
-            connect(redirectReply, &QNetworkReply::finished, &redirectLoop, &QEventLoop::quit);
-            redirectLoop.exec();
+            waitForFinished(redirectReply);
 
             if (redirectReply->error() == QNetworkReply::NoError) {
                 result.data = redirectReply->readAll();
@@ -340,9 +328,7 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
             if (withAuth) {
                 redirectReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
                 QNetworkReply *redirectReplyAuth = m_network.get(redirectReq);
-                QEventLoop redirectLoopAuth;
-                connect(redirectReplyAuth, &QNetworkReply::finished, &redirectLoopAuth, &QEventLoop::quit);
-                redirectLoopAuth.exec();
+                waitForFinished(redirectReplyAuth);
                 if (redirectReplyAuth->error() == QNetworkReply::NoError) {
                     result.data = redirectReplyAuth->readAll();
                     result.httpStatus = redirectReplyAuth->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -507,10 +493,7 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
 
     const QNetworkRequest request = buildRequest(accessToken, url);
     QNetworkReply *reply = m_network.get(request);
-
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -548,9 +531,7 @@ DrivesResult Client::listSharedDrives(const QString &accessToken)
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drives"));
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
 
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -588,9 +569,7 @@ QuotaResult Client::fetchDriveQuota(const QString &accessToken)
     url.setQuery(query);
 
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -624,9 +603,7 @@ ListChildrenResult Client::listDriveChildren(const QString &accessToken, const Q
     url.setQuery(query);
 
     QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     const QByteArray payload = readReply(reply, result);
     if (!result.success) {
@@ -657,9 +634,7 @@ DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemI
         graphUrl(driveId.isEmpty() ? QStringLiteral("/v1.0/me/drive/items/%1").arg(itemId) : QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
 
     QNetworkReply *reply = m_network.deleteResource(buildRequest(accessToken, url));
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -700,9 +675,7 @@ UploadResult Client::uploadItemByPath(const QString &accessToken, const QString 
     request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
 
     QNetworkReply *reply = m_network.put(request, source);
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -741,9 +714,7 @@ UploadResult Client::uploadItemById(const QString &accessToken, const QString &d
     request.setHeader(QNetworkRequest::ContentTypeHeader, effectiveMimeType(mimeType));
 
     QNetworkReply *reply = m_network.put(request, source);
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -791,9 +762,7 @@ DriveItemResult Client::updateItem(const QString &accessToken, const QString &dr
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = m_network.sendCustomRequest(request, "PATCH", body);
 
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -829,9 +798,7 @@ DriveItemResult Client::createFolder(const QString &accessToken, const QString &
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     QNetworkReply *reply = m_network.post(request, body);
 
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -874,9 +841,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
     const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
     qCDebug(ONEDRIVE) << "Graph copy POST" << url << body;
     QNetworkReply *reply = m_network.post(buildRequest(accessToken, url), body);
-    QEventLoop loop;
-    connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    loop.exec();
+    waitForFinished(reply);
 
     if (reply->error() != QNetworkReply::NoError) {
         result.errorMessage = reply->errorString();
@@ -921,9 +886,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
             finalResult = getItemById(accessToken, QString(), targetId);
         } else if (!resourceLocation.isEmpty()) {
             QNetworkReply *resourceReply = m_network.get(buildRequest(accessToken, QUrl(resourceLocation)));
-            QEventLoop resourceLoop;
-            connect(resourceReply, &QNetworkReply::finished, &resourceLoop, &QEventLoop::quit);
-            resourceLoop.exec();
+            waitForFinished(resourceReply);
             if (resourceReply->error() == QNetworkReply::NoError) {
                 finalResult.item = parseItem(QJsonDocument::fromJson(resourceReply->readAll()).object());
                 finalResult.httpStatus = resourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -948,9 +911,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
         QNetworkRequest monitorRequest = buildRequest(accessToken, QUrl(monitorUrl));
         monitorRequest.setRawHeader(HeaderAccept, MimeApplicationJson.toUtf8());
         QNetworkReply *monitorReply = m_network.get(monitorRequest);
-        QEventLoop monitorLoop;
-        connect(monitorReply, &QNetworkReply::finished, &monitorLoop, &QEventLoop::quit);
-        monitorLoop.exec();
+        waitForFinished(monitorReply);
 
         const int httpStatus = monitorReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const QByteArray monitorData = monitorReply->readAll();
