@@ -14,7 +14,8 @@ items), and upload/download files **as if they were local**.
 * Create folders and upload/overwrite files in personal OneDrive content.
 * Rename, copy/move, and delete entries inside personal drives (shared drives not yet supported).
 * Reports quota and free space metadata for account paths.
-
+* Integration with context menu actions.
+* Integration with an additional OneDrive pane in the properties dialog.
 
 ## Limitations
 
