@@ -33,6 +33,8 @@ const QString SelectItemFields = QStringLiteral(
 const QString SelectMinimalItemFields = QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl");
 const QString SelectSharedWithMeFields =
     QStringLiteral("id,name,size,parentReference,folder,file,lastModifiedDateTime,@microsoft.graph.downloadUrl,remoteItem,remoteItem.parentReference");
+const QString ErrorMissingAccessToken = QStringLiteral("Missing Microsoft Graph access token");
+const QString ErrorMissingAccessTokenOrItemId = QStringLiteral("Missing Microsoft Graph access token or item ID");
 
 const QByteArray HeaderAuthorization = QByteArrayLiteral("Authorization");
 const QByteArray HeaderBearerPrefix = QByteArrayLiteral("Bearer ");
@@ -46,6 +48,15 @@ const QString MimeDirectory = QStringLiteral("inode/directory");
 
 constexpr int CopyMonitorTimeoutMs = 120000;
 constexpr int CopyMonitorDelayMs = 500;
+
+template<typename Result>
+Result unauthorizedResult(const QString &message)
+{
+    Result result;
+    result.httpStatus = 401;
+    result.errorMessage = message;
+    return result;
+}
 
 QUrl graphUrl(const QString &path, QUrl::ParsingMode parsingMode = QUrl::DecodedMode)
 {
@@ -87,9 +98,7 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
 {
     ListChildrenResult result;
     if (accessToken.isEmpty()) {
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        result.httpStatus = 401;
-        return result;
+        return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/root/children"));
@@ -136,9 +145,7 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
 
     ListChildrenResult result;
     if (accessToken.isEmpty()) {
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        result.httpStatus = 401;
-        return result;
+        return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/root:/%1:/children").arg(cleanedPath), QUrl::DecodedMode);
@@ -176,9 +183,7 @@ DriveItemResult Client::getItemByPath(const QString &accessToken, const QString 
 {
     DriveItemResult result;
     if (accessToken.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        return result;
+        return unauthorizedResult<DriveItemResult>(ErrorMissingAccessToken);
     }
 
     const QString cleanedPath = relativePath.trimmed();
@@ -216,9 +221,7 @@ DriveItemResult Client::getItemById(const QString &accessToken, const QString &d
 {
     DriveItemResult result;
     if (accessToken.isEmpty() || itemId.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive item information");
-        return result;
+        return unauthorizedResult<DriveItemResult>(QStringLiteral("Missing Microsoft Graph access token or drive item information"));
     }
 
     QUrl url =
@@ -252,9 +255,7 @@ DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QSt
 {
     DriveItemResult result;
     if (accessToken.isEmpty() || driveId.isEmpty() || itemId.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive information");
-        return result;
+        return unauthorizedResult<DriveItemResult>(QStringLiteral("Missing Microsoft Graph access token or drive information"));
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2").arg(driveId, itemId));
@@ -494,9 +495,7 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
 {
     ListChildrenResult result;
     if (accessToken.isEmpty()) {
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        result.httpStatus = 401;
-        return result;
+        return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/sharedWithMe"));
@@ -543,9 +542,7 @@ DrivesResult Client::listSharedDrives(const QString &accessToken)
 {
     DrivesResult result;
     if (accessToken.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        return result;
+        return unauthorizedResult<DrivesResult>(ErrorMissingAccessToken);
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drives"));
@@ -583,9 +580,7 @@ QuotaResult Client::fetchDriveQuota(const QString &accessToken)
 {
     QuotaResult result;
     if (accessToken.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token");
-        return result;
+        return unauthorizedResult<QuotaResult>(ErrorMissingAccessToken);
     }
 
     QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive"));
@@ -619,9 +614,7 @@ ListChildrenResult Client::listDriveChildren(const QString &accessToken, const Q
 {
     ListChildrenResult result;
     if (accessToken.isEmpty() || driveId.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or drive ID");
-        return result;
+        return unauthorizedResult<ListChildrenResult>(QStringLiteral("Missing Microsoft Graph access token or drive ID"));
     }
 
     QUrl url = graphUrl(itemId.isEmpty() ? QStringLiteral("/v1.0/drives/%1/root/children").arg(driveId)
@@ -657,9 +650,7 @@ DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemI
 {
     DeleteResult result;
     if (accessToken.isEmpty() || itemId.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or item ID");
-        return result;
+        return unauthorizedResult<DeleteResult>(ErrorMissingAccessTokenOrItemId);
     }
 
     QUrl url =
@@ -773,9 +764,7 @@ DriveItemResult Client::updateItem(const QString &accessToken, const QString &dr
 {
     DriveItemResult result;
     if (accessToken.isEmpty() || itemId.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or item ID");
-        return result;
+        return unauthorizedResult<DriveItemResult>(ErrorMissingAccessTokenOrItemId);
     }
 
     if (newName.isEmpty() && parentPath.isEmpty()) {
@@ -825,9 +814,7 @@ DriveItemResult Client::createFolder(const QString &accessToken, const QString &
 {
     DriveItemResult result;
     if (accessToken.isEmpty() || parentId.isEmpty() || name.trimmed().isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or parent information");
-        return result;
+        return unauthorizedResult<DriveItemResult>(QStringLiteral("Missing Microsoft Graph access token or parent information"));
     }
 
     QJsonObject payload;
@@ -870,9 +857,7 @@ DriveItemResult Client::copyItem(const QString &accessToken,
 {
     DriveItemResult result;
     if (accessToken.isEmpty() || itemId.isEmpty() || parentPath.isEmpty()) {
-        result.httpStatus = 401;
-        result.errorMessage = QStringLiteral("Missing Microsoft Graph access token or copy information");
-        return result;
+        return unauthorizedResult<DriveItemResult>(QStringLiteral("Missing Microsoft Graph access token or copy information"));
     }
 
     QJsonObject payload;
