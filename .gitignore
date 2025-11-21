@@ -7,3 +7,4 @@ build-root
 .vscode/
 compile_commands.json
 .cache/
+.onedrive.env
