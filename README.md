@@ -53,8 +53,8 @@ project kio-onedrive:
 
 What this project configuration fragment says is essentially:
 
-  * `repository: ""`: this project repository URL.
-  * `no-src: true`: not to update the source code, skipping the project `update`
+* `repository: ""`: this project repository URL.
+* `no-src: true`: not to update the source code, skipping the project `update`
   phase.
 
 ## Configuring the Microsoft KAccounts provider
