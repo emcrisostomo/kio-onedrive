@@ -351,8 +351,7 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        // Handle redirects manually to control Authorization header.  Even though the API documents returning a 302, we handle all
-        // common redirect status codes here.
+        // Handle redirects manually to control Authorization header.
         if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
             const QUrl redirectUrl = reply->header(QNetworkRequest::LocationHeader).toUrl();
             reply->deleteLater();
@@ -423,7 +422,7 @@ DownloadStreamResult Client::streamDownloadItem(const QString &accessToken,
         }
     }
 
-    // A download URL is a signed URL that can be used without authentication
+    // Preferred: signed URL (anonymous)
     if (!resolvedDownloadUrl.isEmpty()) {
         QNetworkRequest fallbackReq{QUrl(resolvedDownloadUrl)};
         result = performDownload(fallbackReq, accessToken, onChunk, false, "signed-url-anon");
@@ -434,7 +433,7 @@ DownloadStreamResult Client::streamDownloadItem(const QString &accessToken,
         qCWarning(ONEDRIVE) << "Download URL missing for item" << itemId << "- falling back to Graph content endpoints";
     }
 
-    // If a drive id is provided, try the drive-specific content endpoint first
+    // Fallbacks: drive-scoped content, then /me/drive content
     if (!driveId.isEmpty()) {
         QUrl driveUrl = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
         QNetworkRequest driveReq = buildRequest(accessToken, driveUrl);
