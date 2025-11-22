@@ -11,6 +11,7 @@
 
 #include "onedriveaccount.h"
 #include "onedriveclient.h"
+#include "onedriveurl.h"
 #include "pathcache.h"
 
 #include <KIO/WorkerBase>
@@ -80,6 +81,9 @@ private:
     QString resolveSharedDriveId(const QString &idOrName, const QString &accountId);
 
     OneDriveAccountPtr getAccount(const QString &accountName);
+
+    std::pair<KIO::WorkerResult, OneDrive::DriveItem>
+    resolveItemForGet(const QUrl &url, const OneDriveUrl &oneDriveUrl, const QString &accountId, const OneDriveAccountPtr &account);
 
     [[nodiscard]] std::pair<KIO::WorkerResult, QString> rootFolderId(const QString &accountId);
     [[nodiscard]] KIO::WorkerResult listAccountRoot(const QUrl &url, const QString &accountId, const OneDriveAccountPtr &account);

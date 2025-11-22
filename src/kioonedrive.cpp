@@ -353,12 +353,14 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveSharedWithMeKey(const 
         return {KIO::WorkerResult::pass(), remoteKey};
     }
 
+    // We're expecting URLs of the form: /ACCOUNT_ID/shared_with_me/SHARE_ID/...
     const auto oneDriveUrl = OneDriveUrl(url);
     const QStringList components = oneDriveUrl.pathComponents();
     if (components.size() < 3) {
         return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
     }
 
+    // Build the path to the shared root item, if we don't have it cached, refresh the list
     const QString shareRootPath = QStringLiteral("/%1/%2/%3").arg(accountId, OneDriveUrl::SharedWithMeDir, components.at(2));
     QString shareRootKey = m_cache.idForPath(shareRootPath);
     if (shareRootKey.isEmpty()) {
@@ -382,6 +384,7 @@ std::pair<KIO::WorkerResult, QString> KIOOneDrive::resolveSharedWithMeKey(const 
         return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), QString()};
     }
 
+    // If we're at the root of the shared item, return now, otherwise proceed to resolve the path as relative path within the shared item, from the root
     const QStringList relativeComponents = components.mid(3);
     if (relativeComponents.isEmpty()) {
         m_cache.insertPath(url.path(), shareRootKey);
@@ -1008,6 +1011,51 @@ StreamResult streamItemToClient(KIO::WorkerBase *worker,
 }
 } // namespace
 
+std::pair<KIO::WorkerResult, OneDrive::DriveItem>
+KIOOneDrive::resolveItemForGet(const QUrl &url, const OneDriveUrl &oneDriveUrl, const QString &accountId, const OneDriveAccountPtr &account)
+{
+    if (oneDriveUrl.isSharedWithMe()) {
+        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
+        if (!keyResult.success()) {
+            return {keyResult, OneDrive::DriveItem()};
+        }
+
+        const QStringList ids = remoteKey.split(QLatin1Char('|'));
+        if (ids.size() != 2) {
+            return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), OneDrive::DriveItem()};
+        }
+
+        // Fetch the item by its driveId and itemId
+        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
+        if (!graphItem.success) {
+            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+                return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString()), OneDrive::DriveItem()};
+            }
+            if (graphItem.httpStatus == 404) {
+                return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), OneDrive::DriveItem()};
+            }
+            return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage), OneDrive::DriveItem()};
+        }
+
+        return {KIO::WorkerResult::pass(), graphItem.item};
+    }
+
+    const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
+    const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
+    if (!graphItem.success) {
+        qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
+        if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
+            return {KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString()), OneDrive::DriveItem()};
+        }
+        if (graphItem.httpStatus == 404) {
+            return {KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path()), OneDrive::DriveItem()};
+        }
+        return {KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage), OneDrive::DriveItem()};
+    }
+
+    return {KIO::WorkerResult::pass(), graphItem.item};
+}
+
 KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << "Fetching content of" << url;
@@ -1028,107 +1076,45 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
         return sharedDrivesUnsupported(url);
     }
 
-    if (oneDriveUrl.isSharedWithMe()) {
-        const auto [keyResult, remoteKey] = resolveSharedWithMeKey(url, accountId, account);
-        if (!keyResult.success()) {
-            return keyResult;
-        }
+    // Disallow SharedWithMe root, SharedDrives root/drive, trash root/items, and anything else that isn't a concrete item
+    if (oneDriveUrl.isSharedWithMeRoot() || oneDriveUrl.isTrashDir() || oneDriveUrl.isTrashed()) {
+        return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    }
 
-        const QStringList ids = remoteKey.split(QLatin1Char('|'));
-        if (ids.size() != 2) {
-            return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-        }
+    const auto [resolveResult, item] = resolveItemForGet(url, oneDriveUrl, accountId, account);
+    if (!resolveResult.success()) {
+        return resolveResult;
+    }
 
-        const auto graphItem = m_graphClient.getItemById(account->accessToken(), ids.at(0), ids.at(1));
-        if (!graphItem.success) {
-            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
-                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-            }
-            if (graphItem.httpStatus == 404) {
-                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-            }
-            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
-        }
+    if (item.isFolder) {
+        return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
+    }
 
-        if (graphItem.item.isFolder) {
-            return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
-        }
+    if (!item.mimeType.isEmpty()) {
+        mimeType(item.mimeType);
+    } else {
+        QMimeDatabase db;
+        const auto mime = db.mimeTypeForFile(item.name, QMimeDatabase::MatchExtension);
+        mimeType(mime.name());
+    }
 
-        if (!graphItem.item.mimeType.isEmpty()) {
-            mimeType(graphItem.item.mimeType);
-        } else {
-            QMimeDatabase db;
-            const auto mime = db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension);
-            mimeType(mime.name());
-        }
+    const auto downloadResult = streamItemToClient(this, m_graphClient, account, item, [&](const OneDriveAccountPtr &acc) {
+        return m_accountManager->refreshAccount(acc);
+    });
 
-        const auto downloadResult = streamItemToClient(this, m_graphClient, account, graphItem.item, [&](const OneDriveAccountPtr &acc) {
-            return m_accountManager->refreshAccount(acc);
-        });
-        if (!downloadResult.success) {
-            if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
-                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-            }
-            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
-        }
-
+    if (downloadResult.success) {
         return KIO::WorkerResult::pass();
     }
 
-    if (!oneDriveUrl.isSharedWithMe() && !oneDriveUrl.isSharedWithMeRoot() && !oneDriveUrl.isSharedDrivesRoot() && !oneDriveUrl.isSharedDrive()
-        && !oneDriveUrl.isTrashDir() && !oneDriveUrl.isTrashed()) {
-        const QString relativePath = oneDriveUrl.pathComponents().mid(1).join(QStringLiteral("/"));
-        const auto graphItem = m_graphClient.getItemByPath(account->accessToken(), relativePath);
-        if (!graphItem.success) {
-            qCWarning(ONEDRIVE) << "Graph getItemByPath failed for" << accountId << relativePath << graphItem.httpStatus << graphItem.errorMessage;
-            if (graphItem.httpStatus == 401 || graphItem.httpStatus == 403) {
-                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-            }
-            if (graphItem.httpStatus == 404) {
-                return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
-            }
-            return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, graphItem.errorMessage);
-        }
-
-        if (graphItem.item.isFolder) {
-            return KIO::WorkerResult::fail(KIO::ERR_IS_DIRECTORY, url.path());
-        }
-
-        if (!graphItem.item.mimeType.isEmpty()) {
-            mimeType(graphItem.item.mimeType);
-        } else {
-            QMimeDatabase db;
-            const auto mime = db.mimeTypeForFile(graphItem.item.name, QMimeDatabase::MatchExtension);
-            mimeType(mime.name());
-        }
-
-        const auto downloadResult = streamItemToClient(this, m_graphClient, account, graphItem.item, [&](const OneDriveAccountPtr &acc) {
-            return m_accountManager->refreshAccount(acc);
-        });
-        if (!downloadResult.success) {
-            qCWarning(ONEDRIVE) << "Failed downloading" << relativePath << downloadResult.httpStatus << downloadResult.errorMessage;
-            if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
-                return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
-            }
-            return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
-        }
-
-        return KIO::WorkerResult::pass();
+    if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
+        return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
     }
 
-    return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
+    return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
 }
 
 KIO::WorkerResult KIOOneDrive::readPutData(QTemporaryFile &tempFile, const QString &fileName, QString *detectedMimeType)
 {
-    // TODO: Instead of using a temp file, upload directly the raw data (requires
-    // support in LibKGAPI)
-
-    // TODO: For large files, switch to resumable upload and upload the file in
-    // reasonably large chunks (requires support in LibKGAPI)
-
-    // TODO: Support resumable upload (requires support in LibKGAPI)
-
     if (!tempFile.open()) {
         return KIO::WorkerResult::fail(KIO::ERR_CANNOT_WRITE, tempFile.fileName());
     }
