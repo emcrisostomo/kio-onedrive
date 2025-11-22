@@ -307,14 +307,19 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
                                              const char *label)
 {
     DownloadStreamResult res;
-    // TODO: centralise this attribute setting in buildRequest()
-    req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+    auto prepareRequest = [](const QNetworkRequest &base) {
+        QNetworkRequest r(base);
+        r.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+        r.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        return r;
+    };
+
+    req = prepareRequest(req);
     const QString authHost = req.url().host();
 
-    // TODO: configure the maximum number of redirects somewhere globally
-    for (int redirectCount = 0; redirectCount < 3; ++redirectCount) {
-        QNetworkRequest currentReq(req);
+    constexpr int MaxRedirects = 3;
+    for (int redirectCount = 0; redirectCount < MaxRedirects; ++redirectCount) {
+        QNetworkRequest currentReq = prepareRequest(req);
         // This prevents sending the Authorization header to untrusted hosts when following redirects
         if (withAuth && !authHost.isEmpty() && !accessToken.isEmpty() && currentReq.url().host() == authHost) {
             currentReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
@@ -358,8 +363,7 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
                 return res;
             }
             QNetworkRequest redirectReq(redirectUrl);
-            redirectReq.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-            redirectReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+            redirectReq = prepareRequest(redirectReq);
             req = redirectReq;
             continue;
         }
