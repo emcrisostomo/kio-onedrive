@@ -812,8 +812,7 @@ KIO::WorkerResult KIOOneDrive::mkdir(const QUrl &url, int permissions)
         return KIO::WorkerResult::fail(KIO::ERR_WORKER_DEFINED, createResult.errorMessage);
     }
 
-    const QString normalizedPath = url.adjusted(QUrl::StripTrailingSlash).path();
-    if (!normalizedPath.isEmpty() && !createResult.item.id.isEmpty()) {
+    if (const QString normalizedPath = url.adjusted(QUrl::StripTrailingSlash).path(); !normalizedPath.isEmpty() && !createResult.item.id.isEmpty()) {
         m_cache.insertPath(normalizedPath, createResult.item.id);
     }
 
@@ -953,6 +952,62 @@ KIO::WorkerResult KIOOneDrive::stat(const QUrl &url)
     return KIO::WorkerResult::fail(KIO::ERR_DOES_NOT_EXIST, url.path());
 }
 
+namespace
+{
+struct StreamResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+};
+
+template<typename RefreshAccountFunc>
+StreamResult streamItemToClient(KIO::WorkerBase *worker,
+                                OneDrive::Client &graphClient,
+                                const OneDriveAccountPtr &account,
+                                const OneDrive::DriveItem &item,
+                                RefreshAccountFunc &&refreshAccount)
+{
+    auto currentAccount = account;
+    auto streamItem = [&](const QString &token) {
+        StreamResult result;
+        qint64 transferred = 0;
+        if (item.size > 0) {
+            worker->totalSize(item.size);
+        }
+        const auto streamResult = graphClient.streamDownloadItem(token, item.id, item.downloadUrl, item.driveId, [&](const QByteArray &chunk) {
+            if (chunk.isEmpty()) {
+                return true;
+            }
+            worker->processedSize(transferred + chunk.size());
+            worker->data(chunk);
+            transferred += chunk.size();
+            return true;
+        });
+        result.success = streamResult.success;
+        result.httpStatus = streamResult.httpStatus;
+        result.errorMessage = streamResult.errorMessage;
+        if (streamResult.success) {
+            if (item.size <= 0) {
+                worker->totalSize(transferred);
+            }
+            worker->processedSize(transferred);
+            worker->data(QByteArray());
+        }
+        return result;
+    };
+
+    // TODO: factor this retry logic somewhere common
+    auto result = streamItem(currentAccount->accessToken());
+    if (!result.success && (result.httpStatus == 401 || result.httpStatus == 403)) {
+        currentAccount = refreshAccount(currentAccount);
+        if (currentAccount && !currentAccount->accessToken().isEmpty()) {
+            result = streamItem(currentAccount->accessToken());
+        }
+    }
+    return result;
+}
+} // namespace
+
 KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
 {
     qCDebug(ONEDRIVE) << "Fetching content of" << url;
@@ -1007,34 +1062,15 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
             mimeType(mime.name());
         }
 
-        auto currentAccount = account;
-        auto tryDownload = [&](const QString &token) {
-            return m_graphClient.downloadItem(token, graphItem.item.id, graphItem.item.downloadUrl, graphItem.item.driveId);
-        };
-        auto downloadResult = tryDownload(currentAccount->accessToken());
-        if (!downloadResult.success && (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403)) {
-            currentAccount = m_accountManager->refreshAccount(currentAccount);
-            if (currentAccount && !currentAccount->accessToken().isEmpty()) {
-                downloadResult = tryDownload(currentAccount->accessToken());
-            }
-        }
+        const auto downloadResult = streamItemToClient(this, m_graphClient, account, graphItem.item, [&](const OneDriveAccountPtr &acc) {
+            return m_accountManager->refreshAccount(acc);
+        });
         if (!downloadResult.success) {
             if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
                 return KIO::WorkerResult::fail(KIO::ERR_CANNOT_LOGIN, url.toDisplayString());
             }
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
         }
-
-        const QByteArray contentData = downloadResult.data;
-        processedSize(contentData.size());
-        totalSize(contentData.size());
-        int transferred = 0;
-        do {
-            const QByteArray chunk = contentData.mid(transferred, 1024 * 8);
-            data(chunk);
-            transferred += chunk.size();
-        } while (transferred < contentData.size());
-        data(QByteArray());
 
         return KIO::WorkerResult::pass();
     }
@@ -1066,17 +1102,9 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
             mimeType(mime.name());
         }
 
-        auto currentAccount = account;
-        auto tryDownload = [&](const QString &token) {
-            return m_graphClient.downloadItem(token, graphItem.item.id, graphItem.item.downloadUrl, graphItem.item.driveId);
-        };
-        auto downloadResult = tryDownload(currentAccount->accessToken());
-        if (!downloadResult.success && (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403)) {
-            currentAccount = m_accountManager->refreshAccount(currentAccount);
-            if (currentAccount && !currentAccount->accessToken().isEmpty()) {
-                downloadResult = tryDownload(currentAccount->accessToken());
-            }
-        }
+        const auto downloadResult = streamItemToClient(this, m_graphClient, account, graphItem.item, [&](const OneDriveAccountPtr &acc) {
+            return m_accountManager->refreshAccount(acc);
+        });
         if (!downloadResult.success) {
             qCWarning(ONEDRIVE) << "Failed downloading" << relativePath << downloadResult.httpStatus << downloadResult.errorMessage;
             if (downloadResult.httpStatus == 401 || downloadResult.httpStatus == 403) {
@@ -1084,19 +1112,6 @@ KIO::WorkerResult KIOOneDrive::get(const QUrl &url)
             }
             return KIO::WorkerResult::fail(KIO::ERR_CANNOT_READ, downloadResult.errorMessage);
         }
-
-        const QByteArray contentData = downloadResult.data;
-
-        processedSize(contentData.size());
-        totalSize(contentData.size());
-
-        int transferred = 0;
-        do {
-            const QByteArray chunk = contentData.mid(transferred, 1024 * 8);
-            data(chunk);
-            transferred += chunk.size();
-        } while (transferred < contentData.size());
-        data(QByteArray());
 
         return KIO::WorkerResult::pass();
     }
