@@ -104,7 +104,6 @@ Client::Client(QObject *parent)
 
 ListChildrenResult Client::listChildren(const QString &accessToken, const QString &driveId, const QString &itemId)
 {
-    ListChildrenResult result;
     if (accessToken.isEmpty()) {
         return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
@@ -118,27 +117,9 @@ ListChildrenResult Client::listChildren(const QString &accessToken, const QStrin
     QUrlQuery query = listingQuery();
     url.setQuery(query);
 
-    const QNetworkRequest request = buildRequest(accessToken, url);
-    QNetworkReply *reply = m_network.get(request);
-    waitForFinished(reply);
-
-    const QByteArray payload = readReply(reply, result);
-    if (!result.success) {
-        return result;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(payload);
-    const QJsonObject root = doc.object();
-    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
-    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
-
-    for (const QJsonValue &value : values) {
-        const QJsonObject obj = value.toObject();
-        result.items.append(parseItem(obj));
-    }
-
-    result.success = true;
-    return result;
+    return fetchPagedList(accessToken, url, [](const QJsonObject &obj, ListChildrenResult &res) {
+        res.items.append(parseItem(obj));
+    });
 }
 
 ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const QString &relativePath)
@@ -148,7 +129,6 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
         return listChildren(accessToken);
     }
 
-    ListChildrenResult result;
     if (accessToken.isEmpty()) {
         return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
@@ -158,27 +138,9 @@ ListChildrenResult Client::listChildrenByPath(const QString &accessToken, const 
     QUrlQuery query = listingQuery();
     url.setQuery(query);
 
-    const QNetworkRequest request = buildRequest(accessToken, url);
-    QNetworkReply *reply = m_network.get(request);
-    waitForFinished(reply);
-
-    const QByteArray payload = readReply(reply, result);
-    if (!result.success) {
-        return result;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(payload);
-    const QJsonObject root = doc.object();
-    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
-    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
-
-    for (const QJsonValue &value : values) {
-        const QJsonObject obj = value.toObject();
-        result.items.append(parseItem(obj));
-    }
-
-    result.success = true;
-    return result;
+    return fetchPagedList(accessToken, url, [](const QJsonObject &obj, ListChildrenResult &res) {
+        res.items.append(parseItem(obj));
+    });
 }
 
 DriveItemResult Client::getItemByPath(const QString &accessToken, const QString &relativePath)
@@ -393,6 +355,41 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
     return res;
 }
 
+void Client::parseListPayload(const QByteArray &payload,
+                              ListChildrenResult &res,
+                              const std::function<void(const QJsonObject &, ListChildrenResult &)> &append) const
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(payload);
+    const QJsonObject root = doc.object();
+    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
+    res.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
+
+    for (const QJsonValue &value : values) {
+        append(value.toObject(), res);
+    }
+}
+
+ListChildrenResult
+Client::fetchPagedList(const QString &accessToken, const QUrl &url, const std::function<void(const QJsonObject &, ListChildrenResult &)> &append)
+{
+    ListChildrenResult result;
+    QUrl nextUrl = url;
+
+    while (!nextUrl.isEmpty()) {
+        QNetworkReply *reply = m_network.get(buildRequest(accessToken, nextUrl));
+        waitForFinished(reply);
+        QByteArray payload = readReply(reply, result);
+        if (!result.success) {
+            return result;
+        }
+        parseListPayload(payload, result, append);
+        nextUrl = QUrl(result.nextLink);
+    }
+
+    result.success = true;
+    return result;
+}
+
 DownloadStreamResult Client::streamDownloadItem(const QString &accessToken,
                                                 const QString &itemId,
                                                 const QString &downloadUrl,
@@ -478,7 +475,7 @@ QByteArray Client::readReply(QNetworkReply *reply, ListChildrenResult &result) c
     return data;
 }
 
-DriveItem Client::parseItem(const QJsonObject &object) const
+DriveItem Client::parseItem(const QJsonObject &object)
 {
     DriveItem item;
     item.id = object.value(QStringLiteral("id")).toString();
@@ -521,7 +518,6 @@ DriveItem Client::parseItem(const QJsonObject &object) const
 
 ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
 {
-    ListChildrenResult result;
     if (accessToken.isEmpty()) {
         return unauthorizedResult<ListChildrenResult>(ErrorMissingAccessToken);
     }
@@ -533,34 +529,13 @@ ListChildrenResult Client::listSharedWithMe(const QString &accessToken)
     query.addQueryItem(QuerySelectKey, SelectSharedWithMeFields);
     url.setQuery(query);
 
-    const QNetworkRequest request = buildRequest(accessToken, url);
-    QNetworkReply *reply = m_network.get(request);
-    waitForFinished(reply);
-
-    if (reply->error() != QNetworkReply::NoError) {
-        result.errorMessage = reply->errorString();
-        result.httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        reply->deleteLater();
-        return result;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
-    const QJsonObject root = doc.object();
-    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
-    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
-
-    for (const QJsonValue &value : values) {
-        const QJsonObject obj = value.toObject();
+    return fetchPagedList(accessToken, url, [](const QJsonObject &obj, ListChildrenResult &res) {
         DriveItem item = parseItem(obj.value(QStringLiteral("remoteItem")).toObject());
         item.remoteDriveId = item.driveId;
         item.remoteItemId = item.id;
         item.id = obj.value(QStringLiteral("id")).toString();
-        result.items.append(item);
-    }
-
-    reply->deleteLater();
-    result.success = true;
-    return result;
+        res.items.append(item);
+    });
 }
 
 DrivesResult Client::listSharedDrives(const QString &accessToken)
@@ -644,25 +619,9 @@ ListChildrenResult Client::listDriveChildren(const QString &accessToken, const Q
     QUrlQuery query = minimalListingQuery();
     url.setQuery(query);
 
-    QNetworkReply *reply = m_network.get(buildRequest(accessToken, url));
-    waitForFinished(reply);
-
-    const QByteArray payload = readReply(reply, result);
-    if (!result.success) {
-        return result;
-    }
-
-    const QJsonDocument doc = QJsonDocument::fromJson(payload);
-    const QJsonObject root = doc.object();
-    const QJsonArray values = root.value(QStringLiteral("value")).toArray();
-    result.nextLink = root.value(QStringLiteral("@odata.nextLink")).toString();
-
-    for (const auto &value : values) {
-        result.items.append(parseItem(value.toObject()));
-    }
-
-    result.success = true;
-    return result;
+    return fetchPagedList(accessToken, url, [](const QJsonObject &obj, ListChildrenResult &res) {
+        res.items.append(parseItem(obj));
+    });
 }
 
 DeleteResult Client::deleteItem(const QString &accessToken, const QString &itemId, const QString &driveId)
