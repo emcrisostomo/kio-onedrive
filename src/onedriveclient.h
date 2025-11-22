@@ -143,5 +143,7 @@ private:
     [[nodiscard]] QNetworkRequest buildRequest(const QString &accessToken, const QUrl &url) const;
     [[nodiscard]] QByteArray readReply(QNetworkReply *reply, ListChildrenResult &result) const;
     [[nodiscard]] DriveItem parseItem(const QJsonObject &object) const;
+    [[nodiscard]] DownloadStreamResult
+    performDownload(QNetworkRequest req, const QString &accessToken, const std::function<bool(const QByteArray &)> &onChunk, bool withAuth, const char *label);
 };
 }
