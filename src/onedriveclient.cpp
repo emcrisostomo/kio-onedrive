@@ -283,90 +283,128 @@ DriveItemResult Client::getDriveItemByPath(const QString &accessToken, const QSt
 
 DownloadResult Client::downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl, const QString &driveId)
 {
+    // Refactored to use streaming download internally to avoid duplicating the download logic
+    QByteArray bufferedData;
+    const auto streamResult = streamDownloadItem(accessToken, itemId, downloadUrl, driveId, [&bufferedData](const QByteArray &chunk) {
+        bufferedData.append(chunk);
+        return true;
+    });
+
     DownloadResult result;
+    result.success = streamResult.success;
+    result.httpStatus = streamResult.httpStatus;
+    result.errorMessage = streamResult.errorMessage;
+    if (result.success) {
+        result.data = std::move(bufferedData);
+    }
+    return result;
+}
+
+DownloadStreamResult Client::streamDownloadItem(const QString &accessToken,
+                                                const QString &itemId,
+                                                const QString &downloadUrl,
+                                                const QString &driveId,
+                                                const std::function<bool(const QByteArray &)> &onChunk)
+{
     if (accessToken.isEmpty() || itemId.isEmpty()) {
+        DownloadStreamResult result;
         result.httpStatus = 401;
         result.errorMessage = QStringLiteral("Missing access token or item ID");
         return result;
     }
+    if (!onChunk) {
+        DownloadStreamResult result;
+        result.httpStatus = 400;
+        result.errorMessage = QStringLiteral("Missing chunk handler");
+        return result;
+    }
 
-    auto tryDownload = [&](QNetworkRequest req, bool withAuth, const char *label) {
+    auto performDownload = [&](QNetworkRequest req, bool withAuth, const char *label) {
+        DownloadStreamResult res;
+        // TODO: centralise this attribute setting in buildRequest()
         req.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
         req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
-        if (withAuth && !accessToken.isEmpty()) {
-            req.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
-        }
+        const QString authHost = req.url().host();
 
-        QNetworkReply *reply = m_network.get(req);
-        waitForFinished(reply);
-
-        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        // Handle redirects ourselves so we can drop auth on the pre-signed URL.
-        if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
-            const QUrl redirectUrl = reply->header(QNetworkRequest::LocationHeader).toUrl();
-            reply->deleteLater();
-            if (!redirectUrl.isValid()) {
-                qCWarning(ONEDRIVE) << "Download attempt" << label << "redirect with invalid Location header";
-                return false;
+        // TODO: configure the maximum number of redirects somewhere globally
+        for (int redirectCount = 0; redirectCount < 3; ++redirectCount) {
+            QNetworkRequest currentReq(req);
+            // This prevents sending the Authorization header to untrusted hosts when following redirects
+            if (withAuth && !authHost.isEmpty() && !accessToken.isEmpty() && currentReq.url().host() == authHost) {
+                currentReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
+            } else {
+                currentReq.setRawHeader(HeaderAuthorization, QByteArray());
             }
 
-            QNetworkRequest redirectReq(redirectUrl);
-            redirectReq.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
-            redirectReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
-            // Pre-signed URL should work anonymously; try anon first, then with auth if requested.
-            QNetworkReply *redirectReply = m_network.get(redirectReq);
-            waitForFinished(redirectReply);
+            QNetworkReply *reply = m_network.get(currentReq);
+            bool abortedByConsumer = false;
 
-            if (redirectReply->error() == QNetworkReply::NoError) {
-                result.data = redirectReply->readAll();
-                result.httpStatus = redirectReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                redirectReply->deleteLater();
-                result.success = true;
-                return true;
-            }
-
-            if (withAuth) {
-                redirectReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
-                QNetworkReply *redirectReplyAuth = m_network.get(redirectReq);
-                waitForFinished(redirectReplyAuth);
-                if (redirectReplyAuth->error() == QNetworkReply::NoError) {
-                    result.data = redirectReplyAuth->readAll();
-                    result.httpStatus = redirectReplyAuth->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                    redirectReplyAuth->deleteLater();
-                    result.success = true;
-                    return true;
+            QObject::connect(reply, &QNetworkReply::readyRead, reply, [&reply, &onChunk, &abortedByConsumer]() {
+                while (reply->bytesAvailable() > 0) {
+                    const QByteArray chunk = reply->read(128 * 1024);
+                    if (chunk.isEmpty()) {
+                        break;
+                    }
+                    if (!onChunk(chunk)) {
+                        abortedByConsumer = true;
+                        reply->abort();
+                        break;
+                    }
                 }
-                qCWarning(ONEDRIVE) << "Download attempt" << label << "redirect follow failed" << redirectUrl
-                                    << redirectReplyAuth->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << redirectReplyAuth->errorString();
-                result.errorMessage = redirectReplyAuth->errorString();
-                result.httpStatus = redirectReplyAuth->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-                redirectReplyAuth->deleteLater();
-                return false;
+            });
+
+            // TODO: drop the nested loop and drive completion via event loop/signals, handling cancellation and timeouts properly
+            QEventLoop loop;
+            QObject::connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+            loop.exec();
+
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+            // Handle redirects manually to control Authorization header.  Even though the API documents returning a 302, we handle all
+            // common redirect status codes here.
+            if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+                const QUrl redirectUrl = reply->header(QNetworkRequest::LocationHeader).toUrl();
+                reply->deleteLater();
+                if (!redirectUrl.isValid()) {
+                    qCWarning(ONEDRIVE) << "Download attempt" << label << "redirect with invalid Location header";
+                    res.errorMessage = QStringLiteral("Redirect with invalid Location header");
+                    res.httpStatus = status;
+                    return res;
+                }
+                QNetworkRequest redirectReq(redirectUrl);
+                redirectReq.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+                redirectReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+                req = redirectReq;
+                continue;
             }
 
-            qCWarning(ONEDRIVE) << "Download attempt" << label << "redirect follow failed" << redirectUrl
-                                << redirectReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << redirectReply->errorString();
-            result.errorMessage = redirectReply->errorString();
-            result.httpStatus = redirectReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            redirectReply->deleteLater();
-            return false;
-        }
+            if (abortedByConsumer) {
+                res.errorMessage = QStringLiteral("Download aborted");
+                res.httpStatus = status;
+                reply->deleteLater();
+                return res;
+            }
 
-        if (reply->error() != QNetworkReply::NoError) {
-            qCWarning(ONEDRIVE) << "Download attempt" << label << "failed" << req.url() << status << reply->errorString();
-            result.errorMessage = reply->errorString();
-            result.httpStatus = status;
+            if (reply->error() != QNetworkReply::NoError) {
+                qCWarning(ONEDRIVE) << "Download attempt" << label << "failed" << req.url() << status << reply->errorString();
+                res.errorMessage = reply->errorString();
+                res.httpStatus = status;
+                reply->deleteLater();
+                return res;
+            }
+
+            res.httpStatus = status;
+            res.success = true;
             reply->deleteLater();
-            return false;
+            return res;
         }
 
-        result.data = reply->readAll();
-        result.httpStatus = status;
-        reply->deleteLater();
-        result.success = true;
-        return true;
+        res.errorMessage = QStringLiteral("Too many redirects");
+        res.httpStatus = 310;
+        return res;
     };
 
+    DownloadStreamResult result;
     QString resolvedDownloadUrl = downloadUrl;
     if (resolvedDownloadUrl.isEmpty()) {
         const auto refreshedItem = getItemById(accessToken, driveId, itemId);
@@ -377,31 +415,30 @@ DownloadResult Client::downloadItem(const QString &accessToken, const QString &i
         }
     }
 
-    // Prefer the pre-signed URL (should require no auth); fall back to Graph content endpoints if missing or failing.
+    // A download URL is a signed URL that can be used without authentication
     if (!resolvedDownloadUrl.isEmpty()) {
         QNetworkRequest fallbackReq{QUrl(resolvedDownloadUrl)};
-        if (tryDownload(fallbackReq, false, "signed-url-anon")) {
-            return result;
-        }
-        if (tryDownload(fallbackReq, true, "signed-url-bearer")) {
+        result = performDownload(fallbackReq, false, "signed-url-anon");
+        if (result.success) {
             return result;
         }
     } else {
         qCWarning(ONEDRIVE) << "Download URL missing for item" << itemId << "- falling back to Graph content endpoints";
     }
 
-    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
-    if (QNetworkRequest bearerReq = buildRequest(accessToken, url); tryDownload(bearerReq, true, "me-content")) {
-        return result;
-    }
-
+    // If a drive id is provided, try the drive-specific content endpoint first
     if (!driveId.isEmpty()) {
         QUrl driveUrl = graphUrl(QStringLiteral("/v1.0/drives/%1/items/%2/content").arg(driveId, itemId));
         QNetworkRequest driveReq = buildRequest(accessToken, driveUrl);
-        if (tryDownload(driveReq, true, "drive-content")) {
-            return result;
-        }
+        result = performDownload(driveReq, true, "drive-content");
+
+        // If we know the drive, don't fall back to /me because IDs are drive-scoped.
+        return result;
     }
+
+    QUrl url = graphUrl(QStringLiteral("/v1.0/me/drive/items/%1/content").arg(itemId));
+    QNetworkRequest bearerReq = buildRequest(accessToken, url);
+    result = performDownload(bearerReq, true, "me-content");
 
     return result;
 }

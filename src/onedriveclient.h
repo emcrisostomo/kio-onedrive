@@ -12,6 +12,7 @@
 #include <QList>
 #include <QNetworkAccessManager>
 #include <QObject>
+#include <functional>
 
 class QIODevice;
 
@@ -60,6 +61,12 @@ struct DownloadResult {
     QByteArray data;
 };
 
+struct DownloadStreamResult {
+    bool success = false;
+    int httpStatus = 0;
+    QString errorMessage;
+};
+
 struct DeleteResult {
     bool success = false;
     int httpStatus = 0;
@@ -105,6 +112,11 @@ public:
     [[nodiscard]] DriveItemResult getItemById(const QString &accessToken, const QString &driveId, const QString &itemId);
     [[nodiscard]] DownloadResult
     downloadItem(const QString &accessToken, const QString &itemId, const QString &downloadUrl = QString(), const QString &driveId = QString());
+    [[nodiscard]] DownloadStreamResult streamDownloadItem(const QString &accessToken,
+                                                          const QString &itemId,
+                                                          const QString &downloadUrl,
+                                                          const QString &driveId,
+                                                          const std::function<bool(const QByteArray &)> &onChunk);
     [[nodiscard]] ListChildrenResult listSharedWithMe(const QString &accessToken);
     [[nodiscard]] DrivesResult listSharedDrives(const QString &accessToken);
     [[nodiscard]] DriveItemResult getDriveItemByPath(const QString &accessToken, const QString &driveId, const QString &itemId, const QString &relativePath);
