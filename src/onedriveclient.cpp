@@ -269,25 +269,22 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
                                              const char *label)
 {
     DownloadStreamResult res;
-    auto prepareRequest = [](const QNetworkRequest &base) {
-        QNetworkRequest r(base);
-        r.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+    const QString authHost = req.url().host();
+
+    auto makeRequest = [&](const QUrl &url, bool sendAuth) {
+        // Use buildRequest to get baseline headers, then override redirect policy for manual handling.
+        QNetworkRequest r = buildRequest(sendAuth ? accessToken : QString(), url);
         r.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        if (!sendAuth) {
+            r.setRawHeader(HeaderAuthorization, QByteArray());
+        }
         return r;
     };
 
-    req = prepareRequest(req);
-    const QString authHost = req.url().host();
-
     constexpr int MaxRedirects = 3;
     for (int redirectCount = 0; redirectCount < MaxRedirects; ++redirectCount) {
-        QNetworkRequest currentReq = prepareRequest(req);
-        // This prevents sending the Authorization header to untrusted hosts when following redirects
-        if (withAuth && !authHost.isEmpty() && !accessToken.isEmpty() && currentReq.url().host() == authHost) {
-            currentReq.setRawHeader(HeaderAuthorization, HeaderBearerPrefix + accessToken.toUtf8());
-        } else {
-            currentReq.setRawHeader(HeaderAuthorization, QByteArray());
-        }
+        const bool sendAuth = withAuth && !authHost.isEmpty() && !accessToken.isEmpty() && req.url().host() == authHost;
+        QNetworkRequest currentReq = makeRequest(req.url(), sendAuth);
 
         QNetworkReply *reply = m_network.get(currentReq);
         bool abortedByConsumer = false;
@@ -323,9 +320,7 @@ DownloadStreamResult Client::performDownload(QNetworkRequest req,
                 res.httpStatus = status;
                 return res;
             }
-            QNetworkRequest redirectReq(redirectUrl);
-            redirectReq = prepareRequest(redirectReq);
-            req = redirectReq;
+            req.setUrl(redirectUrl);
             continue;
         }
 
