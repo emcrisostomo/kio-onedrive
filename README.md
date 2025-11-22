@@ -13,6 +13,8 @@ specific client ID, please read [README.enterpriseapps.md](README.enterpriseapps
 * Multiple OneDrive accounts via KDE Online Accounts, including an in-worker
 “New account” entry.
 * Browse drives and folders, including a “Shared With Me” virtual folder.
+  * Note: Microsoft has deprecated this API (see [API refence](https://learn.microsoft.com/en-us/graph/api/drive-sharedwithme?view=graph-rest-1.0&tabs=http))
+  and no official alternatives have been announced yet.
 * Download/open files with correct MIME detection.
 * Create folders and upload/overwrite files in personal OneDrive content.
 * Rename, copy/move, and delete entries inside personal drives (shared drives
